@@ -24,7 +24,7 @@ await run('Mañana (vie 7:40)', { time: '2026-10-30T07:40:00-06:00' }, async ({ 
   await shot(page, 'm-hoy.png');
   ok(await page.$$eval('#tabbar button', (b) => b.length) === 5, 'barra con 5 pestañas');
   const tiles = await page.$$eval('.kt', (t) => t.map((x) => x.innerText.replace(/\n/g, ' ')));
-  ok(tiles.length === 3 && /Hábitos 1 de 3/.test(tiles[0]) && /Sueño — .*Sin registrar/.test(tiles[1]) && /^Para hoy/.test(tiles[2]), 'fila «Tu día» con hábitos, sueño y dinero', tiles);
+  ok(tiles.length === 3 && /Hábitos 1 de 3/.test(tiles[0]) && /Sueño — .*Toca para anotar/.test(tiles[1]) && /^Para hoy/.test(tiles[2]), 'fila «Tu día» con hábitos, sueño y dinero', tiles);
   ok(/^Para gastar hoy: /.test(await page.$eval('.kt:nth-child(3)', (e) => e.getAttribute('aria-label'))), 'el lector de pantalla oye la etiqueta completa');
   ok(/Buenos días, Alex/.test(await page.$eval('.vh p', (e) => e.textContent)), 'saludo con tu nombre');
   ok(await page.$eval('#tabbar [data-tab="entregas"] .tbb', (e) => e.textContent).catch(() => '') === '2', 'insignia con 2 entregas urgentes');
@@ -261,6 +261,68 @@ await run('Libros: registro y plan conectados', { time: '2026-10-30T18:00:00-06:
   await page.click('#askYes'); await wait(page, 1500);
   l = await store(page, 'lectura/1984');
   ok(l.estado === 'pendiente' && !(await store(page, 'extras/b1984')) && !(await store(page, 'extras/plan-1984')), 'se quita del registro, vuelve a pendiente y no reaparece', l);
+});
+
+// --- cambio de mes, festejo, deslizar entregas, captura y sueño con un toque ---
+await run('Último día del mes (sáb 31 oct 9:00)', { time: '2026-10-31T09:00:00-06:00' }, async ({ page }) => {
+  ok(await page.$eval('.capsend', (b) => b.disabled), 'el botón de anotar espera a que escribas');
+  await page.fill('#capIn', 'Uber 120');
+  ok(!(await page.$eval('.capsend', (b) => b.disabled)), 'al escribir se activa');
+  await page.fill('#capIn', '');
+  await tab(page, 'dinero'); await wait(page, 300);
+  const all = await page.$eval('#view', (e) => e.innerText);
+  const wk = (all.match(/Próximos 7 días([\s\S]*?)Del dinero que entró/) || [])[1] || '';
+  ok(/Renta[\s\S]*Pago de noviembre/.test(wk) && /Papá[\s\S]*Llega en noviembre/.test(wk), 'el 31 ya avisa lo que toca pagar y recibir el 1', wk);
+  ok((wk.match(/Pago de noviembre/g) || []).length === 3 && (wk.match(/Llega en noviembre/g) || []).length === 1 && /Tocaba el 28/.test(wk), 'solo lo de esos días, sin repetir lo atrasado', wk);
+});
+
+await run('Primer día del mes (dom 1 nov 9:00)', { time: '2026-11-01T09:00:00-06:00' }, async ({ page }) => {
+  const rc = await page.$eval('.recap', (e) => e.innerText).catch(() => '');
+  ok(/Así cerró octubre/.test(rc) && /Gastaste \$[\d,]+/.test(rc) && /Lo que más pesó/.test(rc) && /Cumpliste el \d+%/.test(rc), 'resumen de octubre en Hoy', rc);
+  await shot(page, 'p9-recap.png');
+  await page.click('[data-act="recapGo"]'); await wait(page, 300);
+  ok(/Octubre 2026/.test(await page.$eval('#view', (e) => e.innerText)), 'te lleva a octubre en Dinero');
+  await tab(page, 'hoy'); await page.click('[data-act="recapHide"]'); await wait(page);
+  ok(!(await page.$('.recap')), 'se puede ocultar');
+});
+
+await run('Noche del viernes (vie 20:30)', { time: '2026-10-30T20:30:00-06:00' }, async ({ page }) => {
+  await tab(page, 'entregas'); await wait(page, 300);
+  ok(!!(await page.$('.swhint')), 'explica que se puede deslizar');
+  const swipe = async (dist) => {
+    let bb = null;
+    for (let k = 0; k < 4 && !bb; k++) { try { const li = await page.$('li.task:not(.done)'); await li.scrollIntoViewIfNeeded(); bb = await li.boundingBox(); } catch { await wait(page, 120); } }
+    const y = bb.y + bb.height / 2;
+    await page.mouse.move(bb.x + 60, y); await page.mouse.down();
+    for (let k = 1; k <= 8; k++) await page.mouse.move(bb.x + 60 + (dist * k) / 8, y + 1);
+    await page.mouse.up();
+  };
+  const id0 = await page.$eval('li.task:not(.done) .tchk', (b) => b.dataset.id);
+  await swipe(40); await wait(page, 500);
+  ok(((await store(page, 'tareas/' + id0)).estado || 'pendiente') !== 'entregada' && !(await page.$('.sheet.open')), 'un deslizamiento corto no hace nada');
+  await swipe(170); await wait(page, 900);
+  ok((await store(page, 'tareas/' + id0)).estado === 'entregada', 'deslizar a la derecha la marca como entregada');
+  ok(!(await page.$('.sheet.open')) && /Entregada/.test(await page.$eval('#toast', (e) => e.textContent)), 'sin abrir la entrega y con deshacer');
+  ok(!(await page.$('.swhint')), 'la explicación ya no se repite');
+  await tab(page, 'habitos'); await wait(page, 300);
+  for (let i = 0; i < 10; i++) {
+    const b = await page.$('.hrow .chk[data-act="hab"][aria-pressed="false"]:not([data-st="opcional"]):not([data-st="exc"]):not([disabled])');
+    if (!b) break; await b.click(); await wait(page, 120);
+  }
+  ok(/Día completo/.test(await page.$eval('#toast', (e) => e.textContent)), 'festeja cuando completas el día', await page.$eval('#toast', (e) => e.textContent));
+  ok(!!(await page.$('.burst i')), 'con una pequeña explosión de color');
+});
+
+await run('Mañana sin sueño (sáb 31 oct 8:10)', { time: '2026-10-31T08:10:00-06:00' }, async ({ page, today }) => {
+  await page.click('.kt[data-act="goSleep"]'); await wait(page, 500);
+  ok(await page.evaluate(() => { const r = document.getElementById('fzBed').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), 'la tarjeta de sueño te lleva a anotarlo');
+  await tab(page, 'habitos'); await wait(page, 300);
+  const g = await page.$eval('.sguess', (e) => e.innerText).catch(() => '');
+  ok(/Como casi siempre/.test(g), 'Hábitos propone tu noche típica', g);
+  await page.click('[data-act="sleepUse"]'); await wait(page, 300);
+  const d = await store(page, 'dias/' + today);
+  ok(d && d.durmio && d.wake && /Dormiste/.test(await page.$eval('#toast', (e) => e.textContent)), 'con un toque queda guardada', d);
+  ok(!(await page.$('.sguess')), 'y la propuesta desaparece');
 });
 
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
