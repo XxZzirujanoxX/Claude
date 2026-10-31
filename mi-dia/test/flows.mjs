@@ -1,6 +1,7 @@
 // Pruebas de punta a punta de Mi día con el runtime simulado.
 // Uso: node mi-dia/test/flows.mjs   (SHOTS=carpeta para guardar capturas)
 import { open, tab, shot, store } from './harness.mjs';
+import { makeSeed } from './seed.mjs';
 
 let fails = 0, passes = 0;
 const ok = (cond, name, extra) => {
@@ -323,6 +324,14 @@ await run('Mañana sin sueño (sáb 31 oct 8:10)', { time: '2026-10-31T08:10:00-
   const d = await store(page, 'dias/' + today);
   ok(d && d.durmio && d.wake && /Dormiste/.test(await page.$eval('#toast', (e) => e.textContent)), 'con un toque queda guardada', d);
   ok(!(await page.$('.sguess')), 'y la propuesta desaparece');
+});
+
+await run('Brightspace detenido (sáb 31 oct 13:00)', { time: '2026-10-31T13:00:00-06:00', seed: (() => { const sd = makeSeed('2026-10-31'); sd['config/brightspace'].ultimaRevision = '2026-10-27T12:00:00.000Z'; return sd; })() }, async ({ page }) => {
+  await tab(page, 'entregas'); await wait(page, 300);
+  ok(/Lleva 4 días sin revisar/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa si la sincronización con Brightspace se detuvo');
+  await tab(page, 'comida'); await wait(page, 300);
+  const hs = await page.$$eval('.wd h3', (x) => x.map((e) => e.textContent));
+  ok(/^Sábado \(hoy\)/.test(hs[0]) && /^Domingo \(mañana\)/.test(hs[1]) && /^Viernes/.test(hs[6]), 'el menú de la semana empieza hoy', hs);
 });
 
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {

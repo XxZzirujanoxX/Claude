@@ -412,6 +412,7 @@ ul.list li:first-child .xrow{border-top:0}
 .starsel button[aria-pressed="true"]{color:var(--din);border-color:var(--din)}
 .starsel button.half{color:var(--din);border-color:var(--din);font-size:1.1rem;font-weight:700}
 .lbline{margin:-6px 0 14px;font-size:.84rem;color:var(--muted)}
+.lbline .stale{color:var(--late);font-weight:600}
 .hint{display:block;font-size:.82rem;color:var(--muted);margin-top:2px}
 
 /* plan de lectura */
@@ -1810,7 +1811,7 @@ function habBottom(H,t,ws){
   h+=`<section class="card" style="--c:var(--hab)"><div class="ch"><h2>Resumen de la semana</h2></div>
     <div class="big"><span class="p">${ws.pct==null?'–':ws.pct+'%'}</span><span class="x">${ws.pct==null?'Aún no hay días registrados':'de lo planeado hasta hoy ('+fmtN(ws.done)+' de '+ws.planned+')'}</span></div>
     <div class="rows">${rows||'<p class="empty">Sin hábitos planeados.</p>'}${mealRow}</div>${excRow}
-    <div class="kpis"><div class="kpi"><div class="v">${hsl.length?fmtH(avgA(hsl)):'–'}</div><div class="k">Sueño promedio</div></div><div class="kpi"><div class="v">${hsl.length?ok+' de '+hsl.length:'–'}</div><div class="k">Noches con ${min} h o más</div></div><div class="kpi"><div class="v">${es.length?avgA(es).toFixed(1):'–'}</div><div class="k">Energía promedio</div></div></div></section>`;
+    <div class="kpis"><div class="kpi"><div class="v">${hsl.length?fmtHc(avgA(hsl)):'–'}</div><div class="k">Sueño promedio</div></div><div class="kpi"><div class="v">${hsl.length?ok+' de '+hsl.length:'–'}</div><div class="k">Noches con ${min} h o más</div></div><div class="kpi"><div class="v">${es.length?avgA(es).toFixed(1):'–'}</div><div class="k">Energía promedio</div></div></div></section>`;
   // reflection
   const w=getWeek(H.week),nw=addDays(H.week,7),nwEnd=addDays(H.week,13);
   const nextT=S.tareas.filter(x=>x.estado!=='entregada'&&x.fecha>=nw&&x.fecha<=nwEnd).sort((a,b)=>dueOf(a)-dueOf(b));
@@ -1911,7 +1912,8 @@ function vEnt(){
   if(!n)h+=`<div class="next empty"><span class="t">${F.filtro==='todas'?'No tienes entregas pendientes.':'Nada pendiente en esta materia.'}</span><span class="m">Agrega una con el botón de abajo.</span></div>`;
   else{const c=countdown(n);h+=`<button type="button" class="next${c.late?' late':''}" data-act="tarea" data-id="${esc(n.id)}"><span class="n">${c.num}</span><span class="u">${esc(c.unit)}</span><span class="t">${esc(n.titulo||'Sin título')}</span><span class="m">${esc(matName(n.materiaId))}, ${esc(dueText(n))}</span></button>`;}
   const bs=S.cfg.brightspace;
-  if(bs&&bs.ultimaRevision){const t=new Date(bs.ultimaRevision);if(!isNaN(t))h+=`<p class="lbline" style="margin:0 0 10px">Se sincroniza sola con Brightspace. Última revisión: ${iso(t)===todayISO()?'hoy':nice(iso(t))} a las ${pad(t.getHours())}:${pad(t.getMinutes())}.</p>`;}
+  if(bs&&bs.ultimaRevision){const t=new Date(bs.ultimaRevision);if(!isNaN(t)){const dd=Math.floor((Date.now()-t.getTime())/864e5);
+    h+=`<p class="lbline" style="margin:0 0 10px">Se sincroniza sola con Brightspace. Última revisión: ${iso(t)===todayISO()?'hoy':nice(iso(t))} a las ${pad(t.getHours())}:${pad(t.getMinutes())}.${dd>=2?` <b class="stale">Lleva ${dd} días sin revisar: puede que la rutina de Brightspace se haya detenido.</b>`:''}</p>`;}}
   h+='<div class="chips" role="toolbar" aria-label="Filtrar por materia">'+`<button type="button" class="chip" data-act="filtro" data-id="todas" aria-pressed="${F.filtro==='todas'}">Todas</button>`
     +materias().map(m=>`<button type="button" class="chip" data-act="filtro" data-id="${esc(m.id)}" aria-pressed="${F.filtro===m.id}"><span class="dot" style="background:${esc(m.color)}"></span>${esc(m.corto||m.nombre)}</button>`).join('')+'</div>';
   if(S.db&&!lsGet('midia:desliza',0)&&S.tareas.some(x=>(x.estado||'pendiente')!=='entregada'))h+='<p class="lbline swhint">Desliza una entrega a la derecha para marcarla como entregada.</p>';
@@ -2662,9 +2664,9 @@ function vCom(){
   let h=header('Comida',mn.meta?esc(mn.meta):'');
   if(!S.cfgReady)return h+loading();
   let wk='';
-  for(let i=1;i<=7;i++){
+  for(let k=0;k<7;k++){const i=((wd-1+k)%7)+1;
     const d=(mn.dias||{})[String(i)],dcs=(mn.descongelar||[]).filter(x=>x.dia===i);
-    wk+=`<div class="wd${i===wd?' today':''}"><div class="wdh"><h3>${DAYS[i-1]}${i===wd?' (hoy)':''}${d&&d.nota?` <small>${esc(d.nota)}</small>`:''}</h3><button class="link" type="button" data-act="menuEdit" data-day="${i}"${!S.db?' disabled':''}>Editar</button></div>`
+    wk+=`<div class="wd${i===wd?' today':''}"><div class="wdh"><h3>${DAYS[i-1]}${k===0?' (hoy)':(k===1?' (mañana)':'')}${d&&d.nota?` <small>${esc(d.nota)}</small>`:''}</h3><button class="link" type="button" data-act="menuEdit" data-day="${i}"${!S.db?' disabled':''}>Editar</button></div>`
       +(hasMeals(d)?mealsDl(d,'com',i):`<p class="muted small" style="margin:0">${i>=6?'Comidas libres':'Sin menú planeado'}</p>`)
       +dcs.map(x=>`<p class="dc">${esc(dcText(x))}</p>`).join('')+'</div>';
   }
