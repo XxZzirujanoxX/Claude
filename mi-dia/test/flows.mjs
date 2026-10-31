@@ -23,6 +23,11 @@ const run = async (name, opts, fn) => {
 await run('Mañana (vie 7:40)', { time: '2026-10-30T07:40:00-06:00' }, async ({ page }) => {
   await shot(page, 'm-hoy.png');
   ok(await page.$$eval('#tabbar button', (b) => b.length) === 5, 'barra con 5 pestañas');
+  const tiles = await page.$$eval('.kt', (t) => t.map((x) => x.innerText.replace(/\n/g, ' ')));
+  ok(tiles.length === 3 && /Hábitos 1 de 3/.test(tiles[0]) && /Sueño — .*Sin registrar/.test(tiles[1]) && /^Para hoy/.test(tiles[2]), 'fila «Tu día» con hábitos, sueño y dinero', tiles);
+  ok(/^Para gastar hoy: /.test(await page.$eval('.kt:nth-child(3)', (e) => e.getAttribute('aria-label'))), 'el lector de pantalla oye la etiqueta completa');
+  ok(/Buenos días, Alex/.test(await page.$eval('.vh p', (e) => e.textContent)), 'saludo con tu nombre');
+  ok(await page.$eval('#tabbar [data-tab="entregas"] .tbb', (e) => e.textContent).catch(() => '') === '2', 'insignia con 2 entregas urgentes');
   const focus = await page.$eval('.focus', (el) => el.innerText).catch(() => '');
   ok(/Para ahora/.test(focus), 'aparece «Para ahora»');
   ok(/Reporte de laboratorio 4/.test(focus) && /¿Cómo dormiste\?/.test(focus), 'entrega vencida y sueño en Para ahora', focus.slice(0, 200));
@@ -33,9 +38,11 @@ await run('Mañana (vie 7:40)', { time: '2026-10-30T07:40:00-06:00' }, async ({ 
   const d = await store(page, 'dias/2026-10-30');
   ok(d && d.durmio === '00:30' && d.wake === '07:05', 'sueño guardado en el día', d);
   ok(!(await page.$('#fzBed')), 'la tarjeta de sueño desaparece al guardar');
+  ok(/6h 35m/.test(await page.$eval('.kt:nth-child(2)', (e) => e.innerText)), 'el medidor de sueño muestra la noche');
   // marcar entregada desde Para ahora y deshacer
   await page.click('.focus [data-act="tcheck"][data-id="t1"]'); await wait(page, 300);
   ok((await store(page, 'tareas/t1')).estado === 'entregada', 'entrega marcada desde Para ahora');
+  ok(await page.$eval('#tabbar [data-tab="entregas"] .tbb', (e) => e.textContent).catch(() => '') === '1', 'la insignia baja a 1');
   await page.click('#toast button'); await wait(page, 300);
   ok((await store(page, 'tareas/t1')).estado === 'pendiente', 'Deshacer la regresa a pendiente');
   // borrar entrega: confirmación dentro de la página
@@ -184,6 +191,14 @@ await run('Tarde (vie 19:10)', { time: '2026-10-30T19:10:00-06:00' }, async ({ p
   ok(!!(await page.$('#agendaCard')), 'la agenda se abre desde la tarjeta Ahora');
 });
 
+await run('Hábito que ya pasó (vie 20:30)', { time: '2026-10-30T20:30:00-06:00' }, async ({ page }) => {
+  if (await page.$('.focus [data-act="focusAll"]')) { await page.click('.focus [data-act="focusAll"]'); await wait(page); }
+  const f = await page.$eval('.focus', (e) => e.innerText).catch(() => '');
+  ok(/Tocaba de 19:00 a 20:00\. ¿Lo hiciste\?/.test(f), 'pregunta por el hábito cuyo horario ya pasó', f);
+  await page.click('.focus [data-act="hab"][data-id="tareas"]'); await wait(page, 300);
+  ok((await store(page, 'dias/2026-10-30')).habits.tareas === true, 'se marca de un toque');
+});
+
 await run('Noche (vie 21:40)', { time: '2026-10-30T21:40:00-06:00', scheme: 'dark' }, async ({ page }) => {
   const top4 = await page.$eval('.focus', (e) => e.innerText).catch(() => '');
   ok(/¿Cómo te sentiste hoy\?/.test(top4), 'de noche, la energía sube entre lo primero', top4);
@@ -228,7 +243,18 @@ await run('Libros: registro y plan conectados', { time: '2026-10-30T18:00:00-06:
   l = await store(page, 'lectura/fahrenheit-451');
   ok(l && l.estado === 'terminado' && l.calif === 4, 'terminarlo en el registro lo marca en el plan', l);
   const lead = (await page.$eval('#view', (e) => e.innerText)).match(/En 2026[^\n]*/)?.[0] || '';
-  ok(/1 película y 2 libros/.test(lead), 'el conteo del año no cuenta doble', lead);
+  ok(/1 película y 3 libros/.test(lead), 'el conteo del año no cuenta doble', lead);
+  await page.click('[data-act="xsub"][data-v="plan"]'); await wait(page);
+  const plan = await page.$eval('#view', (e) => e.innerText);
+  ok(/Fuera del plan[\s\S]*Hábitos atómicos/.test(plan), 'el plan muestra los libros que leíste fuera de él');
+  ok(/Un libro cada ~9 días/.test(plan) && /Esta semana leíste 1 h 15 min/.test(plan), 'calcula tu ritmo y lo que leíste esta semana', plan.match(/Un libro[^\n]*/)?.[0]);
+  await page.click('[data-act="addBook"]'); await wait(page, 300);
+  await page.fill('#xTitulo', 'El extranjero de Albert Camus'); await page.dispatchEvent('#xTitulo', 'input'); await wait(page);
+  ok(await visible(page, '#xPlan'), 'reconoce el título aunque traiga el autor');
+  await page.click('#xEstado [data-v="curso"]'); await page.click('#xGuardar'); await wait(page, 1500);
+  const ex = await store(page, 'lectura/el-extranjero');
+  ok(ex && ex.estado === 'leyendo', 'registrarlo como en curso lo pone «leyendo» en el plan', ex);
+  await page.click('[data-act="xsub"][data-v="reg"]'); await wait(page);
   await page.click('[data-act="xOpen"][data-id="b1984"]'); await wait(page, 300);
   await page.click('#xEliminar'); await wait(page);
   ok(/plan de lectura/.test(await page.$eval('#askT', (e) => e.textContent)), 'al borrar avisa que está en el plan');

@@ -126,6 +126,7 @@ export function makeSeed(today, opts = {}) {
     const doc = { date: d, habits, hora, durmio: pad(bed) + ':' + pad(Math.floor(r() * 4) * 15), wake: pad(wk) + ':' + pad(Math.floor(r() * 4) * 15), comi: { desayuno: r() < 0.6, comida: r() < 0.8, cena: r() < 0.7 } };
     if (r() < 0.6) doc.energy = 2 + Math.floor(r() * 3);
     if (k === 2) doc.note = 'Día pesado de entregas, pero salió bien la exposición.';
+    if (k === 2 || k === 3) doc.cant = { lectura: k === 2 ? 30 : 45 };
     S['dias/' + d] = doc;
   }
   S['dias/' + today] = Object.assign({ date: today, habits: { duolingo: true }, hora: { duolingo: '06:25' } }, opts.todayDay || {});
@@ -174,6 +175,7 @@ export function makeSeed(today, opts = {}) {
   S['extras/e3'] = { tipo: 'curso', titulo: 'Curso de Python', detalle: '', estado: 'pendiente', calif: null, fin: null, nota: '', creado: add(today, -2) + 'T12:00:00.000Z' };
   S['lectura/1984'] = { estado: 'leyendo', ini: add(today, -20), fin: null, calif: null, nota: '', upd: add(today, -20) + 'T12:00:00.000Z' };
   // como en los datos reales: 1984 se terminó en el registro pero el plan seguía en «leyendo»
+  S['extras/b-atomicos'] = { tipo: 'libro', titulo: 'Hábitos atómicos', detalle: 'James Clear', estado: 'terminado', calif: 4, fin: add(today, -15), nota: '', creado: add(today, -40) + 'T12:00:00.000Z' };
   S['extras/b1984'] = { tipo: 'libro', titulo: '1984', detalle: 'George Orwell', estado: 'terminado', calif: 4.5, fin: add(today, -11), nota: '', creado: add(today, -33) + 'T12:00:00.000Z' };
 
   const it = (id, name, tipo, corte, color, hex, extra) => Object.assign({ id, name, tipo, corte, color, hex, material: 'Algodón', estado: 'sirve', cond: '', destino: '', combina: '', nota: '', maxUsos: tipo === 'alta' ? 1 : tipo === 'baja' ? 4 : 0, cantidad: 1, usos: 0, total: 3, ultimo: '', override: null }, extra || {});
