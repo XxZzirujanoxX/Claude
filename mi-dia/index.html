@@ -767,7 +767,7 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .burst{position:fixed;width:0;height:0;pointer-events:none;z-index:80}
 .burst i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;animation:burst 1s cubic-bezier(.15,.75,.3,1) forwards}
 @keyframes burst{0%{transform:translate(0,0) scale(1);opacity:1}65%{opacity:1}100%{transform:translate(var(--x),var(--y)) scale(.55);opacity:0}}
-li.task{position:relative;touch-action:pan-y}
+li.task{position:relative;touch-action:pan-y pinch-zoom}
 li.task>*{transition:transform .22s ease}
 li.task::before{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--sx,0px);background:color-mix(in srgb,var(--ok) 60%,var(--surface));transition:width .22s ease,background-color .15s;pointer-events:none}
 li.task.armed::before,li.task.gone::before{background:var(--ok)}
