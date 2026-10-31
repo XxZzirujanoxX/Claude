@@ -584,6 +584,8 @@ li.task{--inset:48px}
 .seg,.sseg{background:var(--seg);border:0;border-radius:9px;padding:2px;gap:0}
 .seg button,.sseg button{border-radius:7px;padding:7px 4px;font-size:14px;font-weight:500;color:var(--ink)}
 .seg button[aria-pressed="true"],.sseg button[aria-pressed="true"]{background:var(--seg-on);box-shadow:0 3px 8px rgba(0,0,0,.12),0 3px 1px rgba(0,0,0,.04);font-weight:600}
+/* teléfonos angostos: cada opción toma lo que necesita y la letra baja un punto */
+@media (max-width:359px){.seg{grid-auto-columns:auto;gap:2px;padding:3px}.seg button{font-size:12px;padding-inline:2px;letter-spacing:-.01em}}
 
 /* tarjeta dinámica de Hoy */
 .now,.next{background:var(--surface);color:var(--ink);border-radius:16px;box-shadow:var(--card-shadow);padding:20px;width:100%}

@@ -334,6 +334,16 @@ await run('Brightspace detenido (sáb 31 oct 13:00)', { time: '2026-10-31T13:00:
   ok(/^Sábado \(hoy\)/.test(hs[0]) && /^Domingo \(mañana\)/.test(hs[1]) && /^Viernes/.test(hs[6]), 'el menú de la semana empieza hoy', hs);
 });
 
+await run('Teléfono chico en modo oscuro (320 px)', { time: '2026-10-31T13:15:00-06:00', width: 320, scheme: 'dark' }, async ({ page }) => {
+  const bad = [];
+  for (const t of ['hoy', 'habitos', 'entregas', 'dinero', 'comida', 'ejercicio', 'armario', 'extras']) {
+    await tab(page, t); await wait(page, 200);
+    const ov = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    if (ov > 0) bad.push(t + ' +' + ov + 'px');
+  }
+  ok(!bad.length, 'ninguna pantalla se sale de lado', bad);
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });
