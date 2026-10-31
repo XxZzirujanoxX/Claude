@@ -1159,7 +1159,7 @@ function focusItems(t){
     if(b==='late'||b==='today')add(b==='late'?100:86,{c:matColor(x.materiaId),t:x.titulo||'Sin título',s:(b==='late'?'Venció ':'Vence ')+lc1(dueText(x))+' · '+matShort(x.materiaId),go:{act:'tarea',id:x.id},b:{act:'tcheck',id:x.id,label:'Entregada'}});
     else if(b==='tomorrow'&&m>=1080)add(58,{c:matColor(x.materiaId),t:x.titulo||'Sin título',s:'Mañana, '+(x.hora||'23:59')+' · '+matShort(x.materiaId),go:{act:'tarea',id:x.id},b:{act:'tcheck',id:x.id,label:'Entregada'}});});
   // sueño de anoche (si tu reloj no lo mandó todavía)
-  if(S.diasReady&&S.cfg.plan&&started(t)&&!locked(t)&&!day.wake){const wk=toMin(ag.despertar);if(m>=(wk==null?360:wk)-60&&m<840)add(92,{c:'var(--spi)',t:'¿Cómo dormiste?',s:'Ajusta las horas si hace falta y guarda.',form:sleepForm(t)});}
+  if(S.diasReady&&S.cfg.plan&&started(t)&&!locked(t)&&!day.wake){const wk=toMin(ag.despertar);if(m>=(wk==null?360:wk)-60&&m<840)add(92,{c:'var(--spi)',t:'¿Cómo dormiste?',s:S.syncSueno?'Tu iPhone no ha mandado la noche de hoy. Revisa las horas y guarda.':'Ajusta las horas si hace falta y guarda.',form:sleepForm(t)});}
   // nunca falles dos veces
   if(S.cfg.plan&&started(t)&&!locked(t))habits().filter(h=>plannedOn(h,t)&&twice(h,t)).forEach(h=>{const sl=slotTime(slotOf(h.id,t));add(80,{c:HCAT[h.cat]||'var(--hab)',t:h.name,s:'Ayer no se pudo: hoy no lo sueltes'+(sl?' · '+sl:''),b:{act:'hab',date:t,id:h.id,label:'Hecho'}});});
   // dinero: pagos atrasados, gastos de rutina, compras sin categoría y topes de la semana
@@ -3164,6 +3164,7 @@ render(true);
   db.collection('config').onSnapshot(q=>{
     const m={};q.docs.forEach(d=>{m[d.id]=clone(d.data());});
     ['plan','materias','menu','presupuesto','agenda','ejercicio','recetas','letterboxd','brightspace','reglas','perfil'].forEach(k=>{if(!isPending('config/'+k))S.cfg[k]=m[k]||null;});
+    S.syncSueno=q.docs.some(d=>d.id==='sueno');
     const first=!S.cfgReady;S.cfgReady=true;
     if(first&&!S.hab.moved){S.hab.day=homeDay();S.hab.week=mondayOf(S.hab.day);}
     render();autoAll();dataPing();

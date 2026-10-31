@@ -26,6 +26,7 @@ await run('Mañana (vie 7:40)', { time: '2026-10-30T07:40:00-06:00' }, async ({ 
   const focus = await page.$eval('.focus', (el) => el.innerText).catch(() => '');
   ok(/Para ahora/.test(focus), 'aparece «Para ahora»');
   ok(/Reporte de laboratorio 4/.test(focus) && /¿Cómo dormiste\?/.test(focus), 'entrega vencida y sueño en Para ahora', focus.slice(0, 200));
+  ok(/Tu iPhone no ha mandado la noche de hoy/.test(focus), 'avisa que el iPhone no mandó el sueño');
   // guardar sueño
   await page.fill('#fzBed', '00:30'); await page.fill('#fzWake', '07:05');
   await page.click('[data-act="sleepSave"]'); await wait(page, 300);

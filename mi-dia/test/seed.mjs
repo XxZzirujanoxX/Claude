@@ -108,6 +108,7 @@ export function makeSeed(today, opts = {}) {
     opcional: { 5: { rutinas: ['corta'], nota: 'Extra corta si te sobra tiempo' }, 6: { rutinas: ['corta'], nota: '' } },
     tecnicas: { lag: { p: 'Manos a la altura del pecho', m: 'Baja controlado', c: 'Core firme', e: 'Hundir la cadera' } },
   };
+  S['config/sueno'] = { py: '# programa de la rutina (simulado)', sha: '0' };
   S['config/brightspace'] = { ignorados: [], ultimaRevision: add(today, -1) + 'T12:00:00.000Z' };
 
   // días anteriores: hábitos, sueño, energía y comidas
