@@ -822,7 +822,7 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 <div class="sheet" id="shExt" role="dialog" aria-modal="true" aria-labelledby="xT">
   <div class="shh"><h3 id="xT">Agregar</h3><button class="x" type="button" data-close aria-label="Cerrar">×</button></div>
   <div class="sseg" id="xTipo"><button type="button" data-v="pelicula">Película</button><button type="button" data-v="serie">Serie</button><button type="button" data-v="libro">Libro</button><button type="button" data-v="curso">Curso</button></div>
-  <div class="field"><label for="xTitulo">Título</label><input id="xTitulo" type="text" maxlength="120" autocomplete="off"></div>
+  <div class="field"><label for="xTitulo">Título</label><input id="xTitulo" type="text" maxlength="120" autocomplete="off"><span class="hint ai" id="xPlan" hidden></span></div>
   <div class="field"><label for="xDet" id="xDetL">Detalle (opcional)</label><input id="xDet" type="text" maxlength="80" autocomplete="off"></div>
   <div class="field"><span class="lbl">Estado</span><div class="sseg" id="xEstado" style="margin:4px 0 0"><button type="button" data-v="pendiente">Pendiente</button><button type="button" data-v="curso">En curso</button><button type="button" data-v="terminado">Terminado</button></div></div>
   <div id="xFinBox">
@@ -1300,7 +1300,7 @@ function capCheck(a){
     case 'entrega_hecha':{const x=S.tareas.find(y=>y.id===a.id);if(!x){a._bad=true;a._d='Entrega que no encontré';break;}a._d='Entregada: '+x.titulo;break;}
     case 'habito':{const h=habits().find(y=>y.id===a.id);if(!h||!plannedOn(h,t)||locked(t)){a._bad=true;a._d='Hábito que hoy no toca';break;}a._d=h.name+': '+({hecho:'hecho',parcial:'parcial',no:'no lo hice'}[a.estado]||'hecho');break;}
     case 'libro_plan':{const b=LIB.find(y=>y.id===a.id);if(!b){a._bad=true;a._d='Libro que no está en tu plan';break;}a._d=b.title+': '+(a.estado==='terminado'?'terminado':'empecé a leerlo');break;}
-    case 'extra':{const T=XT[a.subtipo];if(!T||!a.titulo){a._bad=true;a._d='Registro incompleto';break;}a._d=T.l+': '+a.titulo+' ('+({pendiente:'pendiente',curso:'en curso',terminado:'terminado'}[a.estado]||'pendiente')+(a.estado==='terminado'&&Number(a.calif)?', '+starTxt(a.calif):'')+')';break;}
+    case 'extra':{const T=XT[a.subtipo];if(!T||!a.titulo){a._bad=true;a._d='Registro incompleto';break;}const pb=a.subtipo==='libro'&&LIBK[bookKey(a.titulo)];a._d=(pb?'Plan de lectura':T.l)+': '+(pb?pb.title:a.titulo)+' ('+({pendiente:'pendiente',curso:'en curso',terminado:'terminado'}[a.estado]||'pendiente')+(a.estado==='terminado'&&Number(a.calif)?', '+starTxt(a.calif):'')+')';break;}
     case 'extra_estado':{const x=S.extras.find(y=>y.id===a.id);if(!x){a._bad=true;a._d='Registro que no encontré';break;}a._d=x.titulo+': '+(a.estado==='terminado'?'terminado'+(Number(a.calif)?', '+starTxt(a.calif):''):'en curso');break;}
     case 'diario':a._d='Diario: «'+String(a.texto||'').slice(0,90)+(String(a.texto||'').length>90?'…':'')+'»';if(!a.texto)a._bad=true;break;
     case 'sueno':{const ok=x=>/^\d{1,2}:\d{2}$/.test(String(x||''));if(!ok(a.durmio)&&!ok(a.desperto)){a._bad=true;a._d='Sueño sin horas';break;}a._d='Sueño: '+[ok(a.durmio)?'te dormiste a las '+a.durmio:'',ok(a.desperto)?'despertaste a las '+a.desperto:''].filter(Boolean).join(', ');break;}
@@ -1387,10 +1387,10 @@ async function capApply(){
         await S.db.doc('lectura/'+b.id).set(body);S.lib.items[b.id]=body;
       }else if(a.tipo==='extra'){
         const term=a.estado==='terminado',cal=Math.max(0,Math.min(5,Number(a.calif)||0));
-        await S.db.collection('extras').add({tipo:a.subtipo,titulo:String(a.titulo).slice(0,120),detalle:'',estado:['pendiente','curso','terminado'].includes(a.estado)?a.estado:'pendiente',calif:term&&cal?cal:null,fin:term?t:null,nota:'',creado:new Date().toISOString()});
+        await S.db.collection('extras').add({tipo:a.subtipo,titulo:String(a.titulo).slice(0,120),detalle:'',estado:['pendiente','curso','terminado'].includes(a.estado)?a.estado:'pendiente',calif:term&&cal?cal:null,fin:term?t:null,nota:'',creado:new Date().toISOString(),upd:new Date().toISOString()});
       }else if(a.tipo==='extra_estado'){
         const x=S.extras.find(y=>y.id===a.id),body=Object.assign({},x);delete body.id;const term=a.estado==='terminado',cal=Math.max(0,Math.min(5,Number(a.calif)||0));
-        Object.assign(body,{estado:term?'terminado':'curso',fin:term?t:null,calif:term&&cal?cal:(term?body.calif||null:null)});await S.db.doc('extras/'+a.id).set(body);
+        Object.assign(body,{estado:term?'terminado':'curso',fin:term?t:null,calif:term&&cal?cal:(term?body.calif||null:null),upd:new Date().toISOString()});await S.db.doc('extras/'+a.id).set(body);
       }else if(a.tipo==='diario'){
         editDay(t,x=>{const cur=String(x.note||'').replace(/\s+$/,'');x.note=(cur?cur+'\n\n':'')+String(a.texto).trim();});
       }else if(a.tipo==='sueno'){
@@ -2294,7 +2294,8 @@ function vExt(){
   if(F.sub==='plan')return h+vLib();
   if(!S.extrasReady)return h+loading();
   const y=String(new Date().getFullYear()),doneY=S.extras.filter(x=>x.estado==='terminado'&&String(x.fin||'').slice(0,4)===y);
-  const libY=LIB.filter(b=>{const d=S.lib.items[b.id];return d&&d.estado==='terminado'&&String(d.fin||'').slice(0,4)===y;}).length;
+  const seen=new Set(doneY.filter(x=>x.tipo==='libro').map(x=>bookKey(x.titulo)));
+  const libY=LIB.filter(b=>{const d=libView(b);return d.estado==='terminado'&&String(d.fin||'').slice(0,4)===y&&!seen.has(bookKey(b.title));}).length;
   const parts=Object.keys(XT).map(k=>{const n=doneY.filter(x=>x.tipo===k).length+(k==='libro'?libY:0);return n?n+' '+XT[k].pl[n===1?0:1]:'';}).filter(Boolean);
   if(parts.length)h+=`<p class="lead" style="font-size:1.25rem;margin:0 0 14px">En ${y} terminaste <b>${esc(listJoin(parts))}</b>.</p>`;
   const lb=S.cfg.letterboxd;
@@ -2316,6 +2317,7 @@ function xRow(x){
   if(x.detalle)meta.push(`<span>${esc(x.detalle)}</span>`);
   if(x.estado==='terminado'&&x.calif)meta.push(`<span class="stars" aria-label="${starLbl(x.calif)}">${starTxt(x.calif)}</span>`);
   if(x.estado==='terminado'&&x.fin)meta.push(`<span>${esc(nice(x.fin))}</span>`);
+  const pb=libOfExtra(x);if(pb)meta.push(`<span class="tag">Plan · ${esc(LIB_PLAN[pb.st].n)}</span>`);
   return `<li><button type="button" class="xrow" data-act="xOpen" data-id="${esc(x.id)}"><span><span class="t">${esc(x.titulo)}</span>${meta.length?`<span class="m">${meta.join('')}</span>`:''}</span><span class="xtag" style="--c:${T.c}">${esc(T.l)}</span></button></li>`;
 }
 let xEdit=null,xTipo='pelicula',xEstado='pendiente',xCalif=0,xSaving=false;
@@ -2323,8 +2325,11 @@ function xSync(){
   pressAll('#xTipo button',b=>b.dataset.v===xTipo);pressAll('#xEstado button',b=>b.dataset.v===xEstado);
   document.querySelectorAll('#xStars button').forEach(b=>{const n=Number(b.dataset.n),half=xCalif===n-0.5;b.setAttribute('aria-pressed',String(n<=xCalif));b.classList.toggle('half',half);b.textContent=half?'½':'★';});
   $('#xCalifTxt').textContent=xCalif?starLbl(xCalif):'Toca una estrella; tócala otra vez para media.';
-  $('#xDetL').textContent=(XT[xTipo]||XT.pelicula).det;$('#xFinBox').style.display=xEstado==='terminado'?'':'none';
+  $('#xDetL').textContent=(XT[xTipo]||XT.pelicula).det;$('#xFinBox').style.display=xEstado==='terminado'?'':'none';xPlanHint();
 }
+function xPlanHint(){const pb=xTipo==='libro'?LIBK[bookKey($('#xTitulo').value)]:null,el=$('#xPlan');el.hidden=!pb;
+  if(pb){el.textContent='Está en tu plan de lectura ('+LIB_PLAN[pb.st].n+', libro '+pb.pos+'): lo que guardes aquí también se marca allá.';if(!$('#xDet').value.trim())$('#xDet').value=pb.author;}}
+$('#xTitulo').addEventListener('input',xPlanHint);
 document.querySelectorAll('#xTipo button').forEach(b=>b.addEventListener('click',()=>{xTipo=b.dataset.v;xSync();}));
 document.querySelectorAll('#xEstado button').forEach(b=>b.addEventListener('click',()=>{xEstado=b.dataset.v;if(xEstado==='terminado'&&!$('#xFin').value)$('#xFin').value=todayISO();xSync();}));
 document.querySelectorAll('#xStars button').forEach(b=>b.addEventListener('click',()=>{const n=Number(b.dataset.n);xCalif=xCalif===n?n-0.5:((n===1&&xCalif===0.5)?0:n);xSync();}));
@@ -2338,18 +2343,24 @@ function openExt(id){
   openSheet('#shExt');if(!x)setTimeout(()=>$('#xTitulo').focus(),240);
 }
 $('#xGuardar').addEventListener('click',async()=>{
-  if(xSaving)return;const titulo=$('#xTitulo').value.trim();if(!titulo){toast('Escribe el título.');$('#xTitulo').focus();return;}
+  if(xSaving)return;let titulo=$('#xTitulo').value.trim();if(!titulo){toast('Escribe el título.');$('#xTitulo').focus();return;}
+  const pb=xTipo==='libro'?LIBK[bookKey(titulo)]:null;
+  if(pb){titulo=pb.title;if(!xEdit){const ex=extrasOf(pb).sort((p,q)=>tsX(q).localeCompare(tsX(p)))[0];if(ex)xEdit=ex.id;}}
   const prev=xEdit?(S.extras.find(e=>e.id===xEdit)||{}):{};const body=Object.assign({},prev);delete body.id;
   const term=xEstado==='terminado';
-  Object.assign(body,{tipo:xTipo,titulo,detalle:$('#xDet').value.trim(),estado:xEstado,calif:term&&xCalif?xCalif:null,fin:term?($('#xFin').value||todayISO()):null,nota:$('#xNota').value.trim(),creado:prev.creado||new Date().toISOString()});
+  Object.assign(body,{tipo:xTipo,titulo,detalle:$('#xDet').value.trim(),estado:xEstado,calif:term&&xCalif?xCalif:null,fin:term?($('#xFin').value||todayISO()):null,nota:$('#xNota').value.trim(),creado:prev.creado||new Date().toISOString(),upd:new Date().toISOString()});
+  if(pb&&!body.detalle)body.detalle=pb.author;
   xSaving=true;
   try{if(xEdit)await S.db.doc('extras/'+xEdit).set(body);else await S.db.collection('extras').add(body);closeSheets();toast(xEdit?'Cambios guardados':'Agregado');}
   catch(e){toast(e&&e.code==='quota_exceeded'?'Llegaste al límite de registros.':'No se pudo guardar. Intenta de nuevo.');}
   finally{xSaving=false;}
 });
 $('#xEliminar').addEventListener('click',async()=>{
-  if(!xEdit||!await ask('¿Eliminar este registro?','Eliminar'))return;
-  try{await S.db.doc('extras/'+xEdit).delete();closeSheets();toast('Eliminado');}catch{toast('No se pudo eliminar.');}
+  const x=S.extras.find(e=>e.id===xEdit),pb=libOfExtra(x),solo=!!pb&&!extrasOf(pb).some(y=>y.id!==xEdit);
+  if(!xEdit||!await ask(solo?'«'+pb.title+'» está en tu plan de lectura. Si lo quitas del registro, en el plan vuelve a «pendiente». ¿Eliminar?':'¿Eliminar este registro?','Eliminar'))return;
+  try{
+    if(solo){bookHold[pb.id]=Date.now()+6000;const d=libDoc(pb)||{},body=Object.assign({},d,{estado:'pendiente',ini:null,fin:null,calif:null,upd:new Date().toISOString()});await S.db.doc('lectura/'+pb.id).set(body);S.lib.items[pb.id]=body;}
+    await S.db.doc('extras/'+xEdit).delete();closeSheets();toast('Eliminado');}catch{toast('No se pudo eliminar.');}
 });
 
 /* ================= PLAN DE LECTURA ================= */
@@ -2377,7 +2388,46 @@ const libSlug=t=>t.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace
 const LIB=[];
 LIB_PLAN.forEach((st,si)=>st.b.forEach((x,i)=>LIB.push({id:libSlug(x[0]),title:x[0],author:x[1],flag:x[2]||'',def:x[2]==='d',st:si,pos:i+1})));
 const libDoc=b=>S.lib.items[b.id]||null;
-const libSt=b=>{const d=libDoc(b);return d?(d.estado||'pendiente'):(b.def?'leyendo':'pendiente');};
+/* plan de lectura y registro de libros son una sola cosa: un libro del plan que marcas en Extras (o al revés) queda igual en los dos; gana el cambio más reciente */
+const bookKey=t=>norm(t).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().replace(/^(el|la|los|las|un|una) /,'');
+const LIBK={};LIB.forEach(b=>{LIBK[bookKey(b.title)]=b;});
+const libOfExtra=x=>x&&x.tipo==='libro'?LIBK[bookKey(x.titulo)]||null:null;
+const extrasByLib=()=>memo('xbl',()=>{const m={};S.extras.forEach(x=>{const b=libOfExtra(x);if(b)(m[b.id]=m[b.id]||[]).push(x);});return m;});
+const extrasOf=b=>(extrasByLib()[b.id]||[]).slice();
+const RANKL={pendiente:1,leyendo:2,terminado:3};
+const pEst=e=>e==='curso'?'leyendo':(e==='terminado'?'terminado':'pendiente');
+const xEst=e=>e==='leyendo'?'curso':e;
+const tsX=x=>String(x.upd||[String(x.creado||''),x.fin?x.fin+'T23:59:59':''].sort().pop()||'');
+function bookPair(b){
+  const d=libDoc(b),P={estado:d?(d.estado||'pendiente'):(b.def?'leyendo':'pendiente'),fin:d&&d.fin||null,calif:d&&d.calif||null,ini:d&&d.ini||null,nota:d&&d.nota||'',ts:d?String(d.upd||''):''};
+  const x=extrasOf(b).sort((p,q)=>tsX(q).localeCompare(tsX(p)))[0]||null;
+  return {P,X:x?{estado:pEst(x.estado),fin:x.fin||null,calif:x.calif||null,ts:tsX(x),doc:x}:null};
+}
+function libView(b){const {P,X}=bookPair(b);return !X||P.ts>=X.ts?P:Object.assign({},P,{estado:X.estado,fin:X.fin,calif:X.calif});}
+const libSt=b=>libView(b).estado;
+/* mantiene iguales los dos lados; solo escribe cuando de verdad difieren */
+let bookT=null;const bookHold={};
+function syncBooks(){clearTimeout(bookT);bookT=setTimeout(syncBooksNow,900);}
+async function syncBooksNow(){
+  if(!S.db||!S.extrasReady||!S.lib.ready)return;
+  const now=()=>new Date().toISOString(),same=(A,B)=>A.estado===B.estado&&(A.estado!=='terminado'||((A.fin||'')===(B.fin||'')&&Number(A.calif||0)===Number(B.calif||0)));
+  let n=0;
+  for(const b of LIB){
+    if(n>=10){syncBooks();break;}
+    if(bookHold[b.id]&&bookHold[b.id]>Date.now())continue;
+    const {P,X}=bookPair(b);
+    try{
+      if(!X){if(RANKL[P.estado]>=2){n++;await S.db.doc('extras/plan-'+b.id).set({tipo:'libro',titulo:b.title,detalle:b.author,estado:xEst(P.estado),calif:P.estado==='terminado'?P.calif||null:null,fin:P.estado==='terminado'?P.fin||todayISO():null,nota:'',creado:(P.ini||todayISO())+'T12:00:00.000Z',fuente:'plan',upd:now()});}continue;}
+      if(same(P,X))continue;
+      n++;
+      if(X.ts>P.ts){const d=libDoc(b)||{},body=Object.assign({},d,{estado:X.estado,ini:X.estado==='pendiente'?null:(d.ini||String(X.doc.creado||todayISO()).slice(0,10)),fin:X.estado==='terminado'?X.fin||todayISO():null,calif:X.estado==='terminado'?X.calif||null:null,upd:now()});
+        await S.db.doc('lectura/'+b.id).set(body);S.lib.items[b.id]=body;}
+      else{const body=Object.assign({},X.doc);delete body.id;Object.assign(body,{estado:xEst(P.estado),fin:P.estado==='terminado'?P.fin||todayISO():null,calif:P.estado==='terminado'?P.calif||null:null,upd:now()});
+        await S.db.doc('extras/'+X.doc.id).set(body);}
+    }catch(e){console.error(e);}
+  }
+  if(n)render();
+}
 
 function vLib(){
   if(!S.lib.ready)return loading();
@@ -2386,7 +2436,7 @@ function vLib(){
   const cur=reading[0]||null;
   let h=`<p class="lead">Llevas <b class="num">${done} de ${total}</b> libros.</p><div class="bar8" style="--cat:${LIBC};margin:0 0 16px"><i style="width:${Math.round(done/total*100)}%"></i></div>`;
   if(cur){
-    const d=libDoc(cur)||{};
+    const d=libView(cur);
     h+=`<section class="now" style="--c:${LIBC}"><p class="now-k">Leyendo ahora${reading.length>1?' (+'+(reading.length-1)+' más)':''}</p><h2 class="now-t">${esc(cur.title)}</h2><p class="now-s">${esc(cur.author)}, ${esc(LIB_PLAN[cur.st].n)}${d.ini?', desde el '+esc(nice(d.ini)):''}</p><div class="nbtns"><button type="button" class="nbtn" data-act="libDone" data-id="${esc(cur.id)}">Lo terminé</button><button type="button" class="nbtn alt" data-act="libOpen" data-id="${esc(cur.id)}">Detalles</button></div></section>`;
   }else if(next){
     h+=`<section class="now" style="--c:${LIBC}"><p class="now-k">Siguiente en tu plan</p><h2 class="now-t">${esc(next.title)}</h2><p class="now-s">${esc(next.author)}, ${esc(LIB_PLAN[next.st].n)}</p><div class="nbtns"><button type="button" class="nbtn" data-act="libStart" data-id="${esc(next.id)}">Empezar a leer</button></div></section>`;
@@ -2404,7 +2454,7 @@ function vLib(){
   return h;
 }
 function libRow(b){
-  const d=libDoc(b)||{},st=libSt(b),meta=[`<span>${esc(b.author)}</span>`];
+  const d=libView(b),st=d.estado,meta=[`<span>${esc(b.author)}</span>`];
   if(b.flag==='n')meta.push('<span class="tag">Nuevo</span>');
   if(b.flag==='r')meta.push('<span class="tag">Recomendado</span>');
   if(st==='terminado'){
@@ -2430,8 +2480,8 @@ document.querySelectorAll('#lStars button').forEach(b=>b.addEventListener('click
 function openLib(id){
   if(!needDb())return;
   const b=LIB.find(x=>x.id===id);if(!b)return;
-  const d=libDoc(b)||{};
-  lEdit=id;lEstado=libSt(b);lCalif=d.calif||0;
+  const d=libView(b);
+  lEdit=id;lEstado=d.estado;lCalif=d.calif||0;
   $('#lT').textContent=b.title;
   $('#lSub').textContent=b.author+', '+LIB_PLAN[b.st].n+', libro '+b.pos+' de '+LIB_PLAN[b.st].b.length;
   $('#lIni').value=d.ini||'';$('#lFin').value=d.fin||'';$('#lNota').value=d.nota||'';
@@ -2780,8 +2830,8 @@ function weekPayload(mon){
       sueno:sh==null?null:fmtH(sh),desperto:day.wake||null,energia:day.energy||null,comidas:day.comi||{},diario:(day.note||'').slice(0,900)});}
   const w=getWeek(mon),end=addDays(mon,6);
   return {semana:'del '+nice(mon)+' al '+nice(addDays(mon,6)),dinero:weekMoney(mon),escuela:{entregadasEstaSemana:S.tareas.filter(x=>x.estado==='entregada'&&x.entregadaEn&&String(x.entregadaEn).slice(0,10)>=mon&&String(x.entregadaEn).slice(0,10)<=end).map(x=>x.titulo+' ('+matShort(x.materiaId)+')'),vencidasSinEntregar:pendientes().filter(x=>dueOf(x)<new Date()).map(x=>x.titulo+' ('+dueText(x)+')')},
-    lectura:{leyendo:LIB.filter(b=>libSt(b)==='leyendo').map(b=>b.title),terminadosEstaSemana:LIB.filter(b=>{const d=libDoc(b);return d&&d.estado==='terminado'&&d.fin>=mon&&d.fin<=end;}).map(b=>b.title),totalPlan:LIB.filter(b=>libSt(b)==='terminado').length+' de '+LIB.length},
-    extrasTerminados:S.extras.filter(x=>x.estado==='terminado'&&x.fin>=mon&&x.fin<=end).map(x=>(XT[x.tipo]||XT.pelicula).l+': '+x.titulo+(x.calif?' ('+x.calif+'/5)':'')),
+    lectura:{leyendo:LIB.filter(b=>libSt(b)==='leyendo').map(b=>b.title),terminadosEstaSemana:LIB.filter(b=>{const d=libView(b);return d.estado==='terminado'&&d.fin>=mon&&d.fin<=end;}).map(b=>b.title),totalPlan:LIB.filter(b=>libSt(b)==='terminado').length+' de '+LIB.length},
+    extrasTerminados:S.extras.filter(x=>x.estado==='terminado'&&x.fin>=mon&&x.fin<=end&&!libOfExtra(x)).map(x=>(XT[x.tipo]||XT.pelicula).l+': '+x.titulo+(x.calif?' ('+x.calif+'/5)':'')),
     armario:window.__arm?window.__arm.week(mon):null,metaDeSuenoPorNoche:minSleep()+' h',cumplimiento:weekStats(mon).pct,
     metas:(w.metas||[]).map(g=>{const p=goalProg(g,mon);return p.label+': '+(p.txt||p.done+' de '+p.total)+(p.ok?' (cumplida)':'');}),
     entregasProximas:S.tareas.filter(x=>x.estado!=='entregada'&&x.fecha>=t&&x.fecha<=addDays(t,10)).map(x=>x.titulo+' ('+matShort(x.materiaId)+', '+dueText(x)+')'),dias};
@@ -3180,8 +3230,8 @@ render(true);
     S.semanas=next;S.semanasReady=true;render();
   },onErr);
   db.collection('tareas').onSnapshot(q=>{S.tareas=q.docs.map(d=>Object.assign({id:d.id},clone(d.data())));S.tareasReady=true;render();},onErr);
-  db.collection('extras').onSnapshot(q=>{S.extras=q.docs.map(d=>Object.assign({id:d.id},clone(d.data())));S.extrasReady=true;render();},onErr);
-  db.collection('lectura').onSnapshot(q=>{const m={};q.docs.forEach(d=>{m[d.id]=clone(d.data());});S.lib.items=m;S.lib.ready=true;render();},onErr);
+  db.collection('extras').onSnapshot(q=>{S.extras=q.docs.map(d=>Object.assign({id:d.id},clone(d.data())));S.extrasReady=true;render();syncBooks();},onErr);
+  db.collection('lectura').onSnapshot(q=>{const m={};q.docs.forEach(d=>{m[d.id]=clone(d.data());});S.lib.items=m;S.lib.ready=true;render();syncBooks();},onErr);
   subMonth(ymOf(new Date()));subMonth(prevYm(ymOf(new Date())));
   try{window.claude.use('sample').then(sm=>{S.sample=sm||null;S.sampleReady=true;autoAll();},()=>{S.sample=null;S.sampleReady=true;autoAll();});}catch{S.sample=null;S.sampleReady=true;}
 })();

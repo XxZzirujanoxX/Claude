@@ -207,6 +207,36 @@ await run('Domingo sin Claude', { time: '2026-11-01T11:00:00-06:00', noSample: t
   ok(/elige la categoría/.test(await page.$eval('#vHint', (e) => e.textContent)), 'pide elegir categoría cuando no la reconoce');
 });
 
+await run('Libros: registro y plan conectados', { time: '2026-10-30T18:00:00-06:00' }, async ({ page }) => {
+  await wait(page, 1500);
+  let l = await store(page, 'lectura/1984');
+  ok(l.estado === 'terminado' && l.fin === '2026-10-19' && l.calif === 4.5, '1984 terminado en el registro → terminado en el plan', l);
+  ok(!(await store(page, 'extras/plan-1984')), 'no lo duplica en el registro');
+  await tab(page, 'extras');
+  await page.click('[data-act="xsub"][data-v="plan"]'); await wait(page);
+  ok(/Rebelión en la granja/.test(await page.$eval('.now', (e) => e.innerText)), 'el plan sigue con el siguiente libro');
+  await page.click('[data-act="libStart"]'); await wait(page, 1500);
+  const rb = await store(page, 'extras/plan-rebelion-en-la-granja');
+  ok(rb && rb.estado === 'curso' && rb.tipo === 'libro', 'empezar un libro del plan lo agrega al registro', rb);
+  await page.click('[data-act="xsub"][data-v="reg"]'); await wait(page);
+  await page.click('#fab'); await wait(page, 300);
+  await page.click('#xTipo [data-v="libro"]');
+  await page.fill('#xTitulo', 'fahrenheit 451'); await page.dispatchEvent('#xTitulo', 'input'); await wait(page);
+  ok(await visible(page, '#xPlan') && await page.$eval('#xDet', (e) => e.value) === 'Ray Bradbury', 'reconoce el libro del plan y pone el autor');
+  await page.click('#xEstado [data-v="terminado"]'); await page.click('#xStars [data-n="4"]');
+  await page.click('#xGuardar'); await wait(page, 1500);
+  l = await store(page, 'lectura/fahrenheit-451');
+  ok(l && l.estado === 'terminado' && l.calif === 4, 'terminarlo en el registro lo marca en el plan', l);
+  const lead = (await page.$eval('#view', (e) => e.innerText)).match(/En 2026[^\n]*/)?.[0] || '';
+  ok(/1 película y 2 libros/.test(lead), 'el conteo del año no cuenta doble', lead);
+  await page.click('[data-act="xOpen"][data-id="b1984"]'); await wait(page, 300);
+  await page.click('#xEliminar'); await wait(page);
+  ok(/plan de lectura/.test(await page.$eval('#askT', (e) => e.textContent)), 'al borrar avisa que está en el plan');
+  await page.click('#askYes'); await wait(page, 1500);
+  l = await store(page, 'lectura/1984');
+  ok(l.estado === 'pendiente' && !(await store(page, 'extras/b1984')) && !(await store(page, 'extras/plan-1984')), 'se quita del registro, vuelve a pendiente y no reaparece', l);
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });

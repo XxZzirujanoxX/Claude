@@ -173,6 +173,8 @@ export function makeSeed(today, opts = {}) {
   S['extras/e2'] = { tipo: 'serie', titulo: 'Una serie larga', detalle: 'Temporada 2', estado: 'curso', calif: null, fin: null, nota: '', creado: add(today, -20) + 'T12:00:00.000Z' };
   S['extras/e3'] = { tipo: 'curso', titulo: 'Curso de Python', detalle: '', estado: 'pendiente', calif: null, fin: null, nota: '', creado: add(today, -2) + 'T12:00:00.000Z' };
   S['lectura/1984'] = { estado: 'leyendo', ini: add(today, -20), fin: null, calif: null, nota: '', upd: add(today, -20) + 'T12:00:00.000Z' };
+  // como en los datos reales: 1984 se terminó en el registro pero el plan seguía en «leyendo»
+  S['extras/b1984'] = { tipo: 'libro', titulo: '1984', detalle: 'George Orwell', estado: 'terminado', calif: 4.5, fin: add(today, -11), nota: '', creado: add(today, -33) + 'T12:00:00.000Z' };
 
   const it = (id, name, tipo, corte, color, hex, extra) => Object.assign({ id, name, tipo, corte, color, hex, material: 'Algodón', estado: 'sirve', cond: '', destino: '', combina: '', nota: '', maxUsos: tipo === 'alta' ? 1 : tipo === 'baja' ? 4 : 0, cantidad: 1, usos: 0, total: 3, ultimo: '', override: null }, extra || {});
   S['armario/inv'] = { items: [
