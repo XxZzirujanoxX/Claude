@@ -392,6 +392,35 @@ await run('Buscar en todo (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:0
   ok(/Nada con «zzzz qqq»/.test(r), 'si no hay nada, lo dice');
 });
 
+// --- «Para ti»: recomendaciones con Claude según lo que calificaste ---
+await run('Para ti (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00' }, async ({ page }) => {
+  await tab(page, 'extras'); await wait(page, 300);
+  ok(/Para ti/.test(await page.$eval('.reco', (e) => e.innerText)), 'tarjeta «Para ti» arriba del registro');
+  await page.click('[data-act="recoAsk"]'); await wait(page, 700);
+  const titulos = () => page.$$eval('.ritem h3', (xs) => xs.map((x) => x.textContent));
+  let items = await titulos();
+  ok(['Perfect Days', 'Past Lives', 'Severance', 'Un mundo feliz'].every((t) => items.includes(t)) && !items.includes('El viaje de Chihiro'), 'películas, series y un libro del plan, sin repetir lo que ya viste', items);
+  ok(/Sigue la línea de 1984/.test(await page.$eval('.reco', (e) => e.innerText)), 'cada una dice por qué');
+  ok(((await store(page, 'config/recos')) || { items: [] }).items.length === 4, 'se guardan para la próxima vez');
+  await page.click('.ritem:has(h3:text-is("Perfect Days")) [data-act="recoAdd"]'); await wait(page, 500);
+  const added = await page.evaluate(() => [...window.__store.entries()].filter(([k, v]) => k.startsWith('extras/') && v.titulo === 'Perfect Days').map(([, v]) => v)[0]);
+  ok(added && added.estado === 'pendiente' && added.tipo === 'pelicula' && /Recomendación de Claude/.test(added.nota), 'Agregar la pone en Pendientes con el porqué', added);
+  ok(!(await titulos()).includes('Perfect Days'), 'y sale de las recomendaciones');
+  await page.click('.ritem:has(h3:text-is("Past Lives")) [data-act="recoNo"]'); await wait(page, 300);
+  const r2 = await store(page, 'config/recos');
+  ok(r2.vetadas.includes('Past Lives') && !r2.items.some((x) => x.titulo === 'Past Lives'), 'descartar la quita y la recuerda');
+  await page.click('.ritem:has(h3:text-is("Un mundo feliz")) [data-act="recoBook"]'); await wait(page, 700);
+  ok(((await store(page, 'lectura/un-mundo-feliz')) || {}).estado === 'leyendo', 'Empezar pone el libro en «leyendo» en el plan');
+  await page.click('[data-act="recoAsk"]'); await wait(page, 700);
+  ok(await page.evaluate(() => window.__sampleLog.some((t) => t.includes('recomendador de cine') && t.includes('Past Lives'))), 'la siguiente vez le dice a Claude lo que descartaste');
+  items = await titulos();
+  ok(items.length === 1 && items[0] === 'Severance', 'y no repite lo que ya agregaste, descartaste o empezaste', items);
+});
+await run('Para ti sin Claude', { noSample: true }, async ({ page }) => {
+  await tab(page, 'extras'); await wait(page, 300);
+  ok(/Disponible cuando abres la app desde Claude/.test(await page.$eval('.reco', (e) => e.innerText)) && !(await page.$('[data-act="recoAsk"]')), 'sin Claude lo explica en lugar de fallar');
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });

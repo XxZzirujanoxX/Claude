@@ -732,6 +732,18 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .now .ndone{font-size:15px;font-weight:600;color:var(--ok)}
 .nowb{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:2px}
 /* menú Más */
+.reco .rlist{display:grid;grid-auto-flow:column;grid-auto-columns:min(78%,300px);gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px;padding:2px 16px 4px;scroll-padding:0 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.reco .rlist::-webkit-scrollbar{display:none}
+.ritem{scroll-snap-align:start;display:flex;flex-direction:column;background:var(--fill);border-radius:14px;padding:12px 12px 10px;border-top:4px solid var(--c);min-height:100%}
+.ritem .rtag{margin:0 0 4px;font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.ritem h3{margin:0;font-size:17px;line-height:1.25}
+.ritem .rdet{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.ritem .rwhy{margin:8px 0 10px;font-size:14px;line-height:1.4;flex:1}
+.ritem .ract{display:flex;align-items:center;gap:8px;margin-top:auto}
+.ritem .ract .fx{margin-left:auto}
+.ritem .pill{background:var(--surface)}
+.rwait{display:flex;align-items:center;gap:10px;margin:4px 0;color:var(--muted);font-size:15px}
+.rfoot{margin:10px 0 0;font-size:12px;color:var(--muted)}
 .srch{position:relative;margin:0 0 12px}
 .srch svg{position:absolute;left:10px;top:50%;width:17px;height:17px;transform:translateY(-50%);fill:none;stroke:var(--muted);stroke-width:2.2;stroke-linecap:round;pointer-events:none}
 .srch input{width:100%;border:0;border-radius:10px;background:var(--seg);padding:9px 12px 9px 34px;font-size:17px;color:var(--ink);outline:none;-webkit-appearance:none;appearance:none}
@@ -2486,6 +2498,7 @@ function vExt(){
   if(lb&&lb.usuario&&(F.filtro==='todo'||F.filtro==='pelicula')){const t=lb.ultimaRevision?new Date(lb.ultimaRevision):null;
     const when=t&&!isNaN(t)?(iso(t)===todayISO()?'hoy':nice(iso(t)))+' a las '+pad(t.getHours())+':'+pad(t.getMinutes()):'';
     h+=`<p class="lbline">Tus películas se sincronizan solas con Letterboxd (@${esc(lb.usuario)})${when?'. Última revisión: '+when:''}.</p>`;}
+  if(F.filtro==='todo')h+=recoCard();
   h+='<div class="chips" role="toolbar" aria-label="Filtrar">'+[['todo','Todo']].concat(Object.keys(XT).map(k=>[k,cap(XT[k].pl[1])])).map(([k,l])=>`<button type="button" class="chip" data-act="xfiltro" data-id="${k}" aria-pressed="${F.filtro===k}">${k!=='todo'?`<span class="dot" style="background:${XT[k].c}"></span>`:''}${esc(l)}</button>`).join('')+'</div>';
   const vis=S.extras.filter(x=>F.filtro==='todo'||x.tipo===F.filtro);
   const groups=[['curso','En curso',(a,b)=>String(b.creado||'').localeCompare(String(a.creado||''))],['pendiente','Pendientes',(a,b)=>String(b.creado||'').localeCompare(String(a.creado||''))],['terminado','Terminados',(a,b)=>String(b.fin||'').localeCompare(String(a.fin||''))]];
@@ -2495,6 +2508,62 @@ function vExt(){
     h+=`<section class="grp"><h2>${l} <span class="count">${arr.length}</span></h2><ul class="list">${shown.map(xRow).join('')}</ul>${arr.length>lim?`<button type="button" class="more" data-act="xmore" data-k="${k}">Ver ${Math.min(XLIM,arr.length-lim)} más</button>`:''}</section>`;});
   if(!any)h+=`<p class="empty" style="text-align:center;padding:24px 8px">${F.filtro==='todo'?'Aún no registras nada. Toca «Agregar» para anotar lo que ves, lees o estudias.':'Nada en esta categoría todavía.'}</p>`;
   return h;
+}
+/* ================= «Para ti»: Claude recomienda según lo que calificaste ================= */
+const recoItems=()=>((S.cfg.recos||{}).items||[]).filter(x=>x&&x.titulo);
+function recoPayload(){
+  const X=S.extras.filter(x=>x.tipo!=='curso'),c=x=>({tipo:x.tipo,titulo:x.titulo,detalle:x.detalle||'',calif:x.calif});
+  const rated=X.filter(x=>x.estado==='terminado'&&x.calif!=null);
+  return {
+    favoritos:rated.filter(x=>Number(x.calif)>=4).sort((a,b)=>b.calif-a.calif).slice(0,40).map(c),
+    noLeGustaron:rated.filter(x=>Number(x.calif)<=2.5).slice(0,15).map(c),
+    enCurso:X.filter(x=>x.estado==='curso').map(x=>x.titulo),
+    yaEnSuLista:X.map(x=>x.titulo).slice(0,400),
+    planDeLectura:LIB.filter(b=>libSt(b)==='pendiente').slice(0,40).map(b=>({id:b.id,titulo:b.title,autor:b.author,etapa:LIB_PLAN[b.st].n})),
+    librosDelPlanYaLeidos:LIB.filter(b=>libSt(b)!=='pendiente').map(b=>{const d=libView(b);return {titulo:b.title,estado:d.estado,calif:d.calif||null};}),
+    descartadas:((S.cfg.recos||{}).vetadas||[]).slice(-100)};
+}
+async function askRecos(){
+  if(!S.sample){toast('Las recomendaciones con Claude no están disponibles aquí.');return;}
+  if(!needDb()||S.ext.recoBusy)return;
+  S.ext.recoBusy=true;render(true);
+  const P=recoPayload();
+  const prompt='Eres un recomendador de cine, series y libros para '+quien()+'. Con sus datos (JSON) recomienda 3 películas y 2 series que NO estén en «yaEnSuLista» ni en «descartadas»: parecidas a lo que puso en «favoritos» y lejos de «noLeGustaron». '
+    +'Además elige 1 libro de «planDeLectura» que le conviene adelantar (usa su id exacto) por su conexión con lo que ya leyó o vio. '
+    +'Escribe en español de México, en segunda persona. Cada «porque» en máximo 20 palabras y nombra al menos un título de sus favoritos. Títulos de películas y series como aparecen en Letterboxd (normalmente el original). '
+    +'Contesta SOLO con JSON así: {"peliculas":[{"titulo":"","anio":2000,"director":"","porque":""}],"series":[{"titulo":"","plataforma":"","porque":""}],"libro":{"id":"","porque":""}}. '
+    +'Datos: '+JSON.stringify(P);
+  try{
+    const r=await S.sample.json(prompt,{modelTier:'default'});
+    const seen=new Set(S.extras.map(x=>fold(x.titulo)).concat(P.descartadas.map(fold))),items=[];
+    const take=(arr,tipo,max,det)=>(Array.isArray(arr)?arr:[]).forEach(x=>{const t=String((x&&x.titulo)||'').trim().slice(0,120),k=fold(t);
+      if(!t||seen.has(k)||items.filter(i=>i.tipo===tipo).length>=max)return;seen.add(k);items.push({k,tipo,titulo:t,detalle:det(x),porque:String(x.porque||'').trim().slice(0,240)});});
+    take(r&&r.peliculas,'pelicula',3,x=>[x.director,x.anio].filter(Boolean).join(', '));
+    take(r&&r.series,'serie',2,x=>String(x.plataforma||''));
+    const b=r&&r.libro&&LIB.find(z=>z.id===r.libro.id&&libSt(z)==='pendiente');
+    if(b)items.push({k:fold(b.title),tipo:'libro',titulo:b.title,detalle:b.author+' · '+LIB_PLAN[b.st].n,porque:String(r.libro.porque||'').trim().slice(0,240),plan:b.id});
+    if(!items.length)throw {code:'bad_answer'};
+    await saveRecos({at:new Date().toISOString(),items,vetadas:P.descartadas});
+    toast('Listo: '+items.length+' recomendaciones para ti');
+  }catch(e){const c=e&&e.code;toast(c==='not_granted'?'No diste permiso para usar Claude aquí.':(c==='rate_limited'?'Demasiadas consultas; intenta en unos minutos.':'No se pudieron pedir recomendaciones. Intenta de nuevo.'));if(c==='not_granted')S.sample=null;}
+  finally{S.ext.recoBusy=false;render(true);}
+}
+async function saveRecos(doc){S.cfg.recos=doc;render(true);try{await S.db.doc('config/recos').set(doc);}catch{toast('No se pudo guardar.');}}
+function dropReco(k,veto){const R=S.cfg.recos||{},it=recoItems().find(x=>x.k===k);if(!it)return null;
+  saveRecos(Object.assign({},R,{items:recoItems().filter(x=>x.k!==k),vetadas:veto?((R.vetadas||[]).concat([it.titulo])).slice(-100):(R.vetadas||[])}));return it;}
+function recoCard(){
+  if(!S.db)return '';
+  const busy=S.ext.recoBusy,items=recoItems(),R=S.cfg.recos||{},nfav=S.extras.filter(x=>x.estado==='terminado'&&Number(x.calif)>=4).length;
+  let body;
+  if(busy)body='<p class="rwait"><span class="cspin" aria-hidden="true"></span>Claude está eligiendo con base en tus calificaciones…</p>';
+  else if(!items.length)body=`<p class="muted small" style="margin:0 0 12px">${nfav?'Claude te sugiere qué ver y qué libro de tu plan adelantar, según lo que calificaste con 4★ o más.':'Califica con estrellas lo que terminas y Claude te sugerirá qué ver y qué leer.'}</p>`
+    +(S.sample?`<button class="secondary" type="button" data-act="recoAsk"${nfav?'':' disabled'}>Pedir recomendaciones</button>`:'<p class="muted small" style="margin:0">Disponible cuando abres la app desde Claude.</p>');
+  else body='<div class="rlist" role="list">'+items.map(x=>{const T=XT[x.tipo]||XT.pelicula;
+      const acts=x.tipo==='libro'?`<button class="pill" type="button" data-act="recoBook" data-k="${esc(x.k)}">Empezar</button><button class="link" type="button" data-act="recoSee" data-k="${esc(x.k)}">Ver en el plan</button>`
+        :`<button class="pill" type="button" data-act="recoAdd" data-k="${esc(x.k)}">Agregar</button>`;
+      return `<article class="ritem" role="listitem" style="--c:${T.c}"><p class="rtag">${esc(x.tipo==='libro'?'De tu plan':T.l)}</p><h3>${esc(x.titulo)}</h3>${x.detalle?`<p class="rdet">${esc(x.detalle)}</p>`:''}${x.porque?`<p class="rwhy">${esc(x.porque)}</p>`:''}<div class="ract">${acts}<button type="button" class="fx" data-act="recoNo" data-k="${esc(x.k)}" aria-label="No me interesa: ${esc(x.titulo)}">×</button></div></article>`;}).join('')+'</div>'
+    +`<p class="rfoot">${R.at?'Elegidas '+(iso(new Date(R.at))===todayISO()?'hoy':'el '+nice(iso(new Date(R.at)))):''}. Desliza para ver más.</p>`;
+  return `<section class="card reco" style="--c:var(--spi)"><div class="ch"><h2>Para ti</h2>${items.length&&!busy&&S.sample?'<button class="link" type="button" data-act="recoAsk">Pedir otras</button>':''}</div>${body}</section>`;
 }
 function xRow(x){
   const T=XT[x.tipo]||XT.pelicula,meta=[];
@@ -3334,6 +3403,12 @@ const ACT={
   saveBudget:()=>{const d=clone(S.din.draft);d.income=d.income.filter(i=>String(i.name).trim());d.cats=d.cats.filter(c=>String(c.name).trim());
     S.cfg.presupuesto=Object.assign({},S.cfg.presupuesto||{},d);S.din.draft=null;S.din.dirty=false;persist('config/presupuesto',()=>S.cfg.presupuesto);render(true);toast('Presupuesto guardado');},
   xfiltro:b=>{S.ext.filtro=b.dataset.id;S.ext.lim={};render(true);},
+  recoAsk:()=>askRecos(),
+  recoAdd:async b=>{const it=dropReco(b.dataset.k,false);if(!it)return;
+    try{await S.db.collection('extras').add({tipo:it.tipo,titulo:it.titulo,detalle:it.detalle||'',estado:'pendiente',calif:null,fin:null,nota:it.porque?'Recomendación de Claude: '+it.porque:'',creado:new Date().toISOString(),upd:new Date().toISOString()});toast('Agregada a Pendientes');}catch{toast('No se pudo agregar.');}},
+  recoNo:b=>{const it=dropReco(b.dataset.k,true);if(it)toast('Listo, no te la vuelvo a sugerir.');},
+  recoBook:b=>{const it=dropReco(b.dataset.k,false);if(it&&it.plan)libQuick(it.plan,'leyendo');},
+  recoSee:b=>{const it=recoItems().find(x=>x.k===b.dataset.k);if(!it||!it.plan)return;S.ext.sub='plan';render(true);window.scrollTo(0,0);openLib(it.plan);},
   xmore:b=>{const k=b.dataset.k;S.ext.lim=S.ext.lim||{};S.ext.lim[k]=((S.ext.lim[k])||XLIM)+XLIM;render(true);},
   xOpen:b=>openExt(b.dataset.id),
   addBook:()=>openExt(null,'libro'),
@@ -3480,7 +3555,7 @@ render(true);
   S.db=db;S.conn='ok';
   db.collection('config').onSnapshot(q=>{
     const m={};q.docs.forEach(d=>{m[d.id]=clone(d.data());});
-    ['plan','materias','menu','presupuesto','agenda','ejercicio','recetas','letterboxd','brightspace','reglas','perfil'].forEach(k=>{if(!isPending('config/'+k))S.cfg[k]=m[k]||null;});
+    ['plan','materias','menu','presupuesto','agenda','ejercicio','recetas','letterboxd','brightspace','reglas','perfil','recos'].forEach(k=>{if(!isPending('config/'+k))S.cfg[k]=m[k]||null;});
     S.syncSueno=q.docs.some(d=>d.id==='sueno');
     const first=!S.cfgReady;S.cfgReady=true;
     if(first&&!S.hab.moved){S.hab.day=homeDay();S.hab.week=mondayOf(S.hab.day);}

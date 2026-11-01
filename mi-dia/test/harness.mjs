@@ -17,6 +17,7 @@ const SAMPLE_HANDLER = `window.__sampleHandler = async (text) => {
   if (window.__sampleFail) return { __error: { code: window.__sampleFail } };
   if (text.includes('Clasificas los gastos')) return { cat: 'ocio', porque: 'Es un gusto personal' };
   if (text.includes('asistente de la app «Mi día»')) return window.__capNext || { respuesta: 'Entendí un gasto.', acciones: [{ tipo: 'gasto', monto: 120, cat: 'gasolina', nota: 'Uber', fecha: '' }] };
+  if (text.includes('recomendador de cine')) return window.__recoNext || { peliculas: [{ titulo: 'Perfect Days', anio: 2023, director: 'Wim Wenders', porque: 'Si te gustó Arrival, esta calma te va a llegar.' }, { titulo: 'El viaje de Chihiro', anio: 2001, porque: 'repetida' }, { titulo: 'Past Lives', anio: 2023, director: 'Celine Song', porque: 'Íntima como tus favoritas.' }], series: [{ titulo: 'Severance', plataforma: 'Apple TV+', porque: 'Misterio con ideas, como Arrival.' }], libro: { id: 'un-mundo-feliz', porque: 'Sigue la línea de 1984.' } };
   if (text.includes('coach de vida')) return { good: 'Constancia en Duolingo.', bad: 'Dormiste tarde.', change: '- Acuéstate antes\\n- Prepara la mochila', ajuste: 'Acuéstate a las 22:30.', porArea: { habitos: 'Vas al 60%.', sueno: '6 h en promedio.' } };
   return { respuesta: 'ok' };
 };`;
