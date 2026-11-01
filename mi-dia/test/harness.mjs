@@ -47,6 +47,7 @@ export async function open(o = {}) {
   await page.clock.setFixedTime(new Date(time));
   const flags = [o.noSample ? 'window.__NOSAMPLE=true;' : '', o.noDb ? 'window.__NODB=true;' : ''].join('');
   await page.addInitScript({ content: 'window.__SEED=' + JSON.stringify(seed) + ';' + flags + SAMPLE_HANDLER + fs.readFileSync(path.join(here, 'mock-runtime.js'), 'utf8') });
+  if (o.beforeGoto) await o.beforeGoto(page, ctx);
   await page.goto('https://midia.test/');
   await page.waitForTimeout(o.settle || 400);
   return { browser, ctx, page, errors, today };

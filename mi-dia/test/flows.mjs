@@ -355,6 +355,20 @@ await run('Mañana del domingo (dom 1 nov 8:00)', { time: '2026-11-01T08:00:00-0
   ok(!(await page.$('.manana')), 'en la mañana no aparece «Mañana»');
 });
 
+// --- rapidez: los datos que llegan juntos se dibujan una sola vez ---
+const CUENTA = `(()=>{window.__renders=0;const go=()=>{const v=document.getElementById('view');if(!v)return setTimeout(go,0);new MutationObserver(()=>window.__renders++).observe(v,{childList:true});};go();})();`;
+await run('Arranque rápido', { settle: 2000, beforeGoto: (pg) => pg.addInitScript({ content: CUENTA }) }, async ({ page }) => {
+  const n = await page.evaluate(() => window.__renders);
+  ok(n <= 4, 'al abrir, la pantalla se dibuja pocas veces (antes eran 12)', n);
+  await page.evaluate(() => { window.__renders = 0; });
+  await page.evaluate(async () => { const db = await window.claude.use('db'); const r = db.doc('config/brightspace'); await r.set(JSON.parse(JSON.stringify(window.__store.get('config/brightspace')))); });
+  await wait(page, 300);
+  ok(await page.evaluate(() => window.__renders) === 0, 'si llegan datos sin cambios, no se vuelve a dibujar');
+  await page.evaluate(async () => { const db = await window.claude.use('db'); await db.doc('tareas/nueva').set({ titulo: 'Ensayo nuevo', materiaId: 'gestion', fecha: '2026-10-30', hora: '23:59', estado: 'pendiente' }); });
+  await wait(page, 300);
+  ok(await page.evaluate(() => window.__renders) === 1 && /Ensayo nuevo/.test(await page.$eval('#view', (e) => e.innerText)), 'y si cambian, se dibuja una vez');
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });
