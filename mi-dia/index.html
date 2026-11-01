@@ -778,6 +778,11 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .hed .opt2{border:0;background:none;color:var(--accent);padding:6px 0;font-size:15px;margin:-2px 0 6px}
 .capsrc{margin:8px 0 0;font-size:13px;color:var(--muted)}
 .capsrc .link{font-size:13px}
+.qa{margin:0 0 4px}
+.qa .qq{margin:0 0 8px;font-size:14px;color:var(--muted)}
+.qa .qq::before{content:"Tu pregunta: "}
+.qa .qa-a{margin:0;font-size:17px;line-height:1.45}
+.qa ul{margin:10px 0 0;padding:10px 12px 10px 28px;background:var(--fill);border-radius:10px;font-size:15px;line-height:1.5}
 .cap .capbox{display:flex;align-items:flex-end;gap:8px;background:var(--fill);border-radius:22px;padding:5px 5px 5px 14px;transition:box-shadow .2s}
 .cap .capbox:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)}
 .cap .capbox textarea{flex:1;min-width:0;min-height:0;max-height:180px;border:0;border-radius:0;background:none;padding:7px 0;resize:none;outline:none;line-height:1.35}
@@ -1415,6 +1420,10 @@ function capCard(){
   const C=S.cap;
   let h='<section class="card cap" style="--c:var(--accent)"><div class="ch"><h2>Captura rápida</h2></div>';
   if(C.res){
+    if(C.res.src==='ask'){
+      h+=`<div class="qa"><p class="qq">${esc(C.res.pregunta||'')}</p><p class="qa-a">${esc(C.res.respuesta||'')}</p>${(C.res.detalle||[]).length?'<ul>'+C.res.detalle.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>':''}</div>`;
+      return h+'<div class="btnrow"><button class="secondary" type="button" data-act="capCancel">Listo</button><button class="secondary" type="button" data-act="capAgain">Otra pregunta</button></div></section>';
+    }
     if(C.res.respuesta)h+=`<p class="muted small" style="margin:0 0 10px">${esc(C.res.respuesta)}</p>`;
     if(C.res.acciones.length){
       h+='<div class="checks">'+C.res.acciones.map((a,i)=>`<button type="button" class="chk" data-act="capTog" data-i="${i}" aria-pressed="${!!C.sel[i]}"${a._bad?' disabled':''}><span class="box">${CHECK}</span><span class="name">${esc(a._d)}${a._w?`<small>${esc(a._w)}</small>`:''}</span></button>`).join('')+'</div>';
@@ -1423,7 +1432,7 @@ function capCard(){
     }else h+='<div class="btnrow"><button class="secondary" type="button" data-act="capCancel">Entendido</button></div>';
     if(C.res.src==='local'&&S.sample)h+='<p class="capsrc">Lo entendí sin Claude, al instante. <button class="link" type="button" data-act="capAI">¿No es así? Pregúntale a Claude</button></p>';
   }else{
-    h+=`<div class="capbox"><textarea id="capIn" data-in="cap" rows="2" aria-label="Captura rápida" placeholder="Ej. Uber 120, hice ejercicio y el jueves tengo examen"${C.busy?' disabled':''}>${esc(C.text)}</textarea><button class="capsend" type="button" data-act="capGo" aria-label="Anotar"${C.busy||!String(C.text||'').trim()?' disabled':''}>${C.busy?'<span class="cspin" aria-hidden="true"></span>':SEND}</button></div>`;
+    h+=`<div class="capbox"><textarea id="capIn" data-in="cap" rows="2" aria-label="Captura rápida" placeholder="Anota o pregunta: «Uber 120», «el jueves tengo examen», «¿cuánto gasté en Uber?»"${C.busy?' disabled':''}>${esc(C.text)}</textarea><button class="capsend" type="button" data-act="capGo" aria-label="Anotar"${C.busy||!String(C.text||'').trim()?' disabled':''}>${C.busy?'<span class="cspin" aria-hidden="true"></span>':SEND}</button></div>`;
     if(C.busy)h+='<p class="capsrc">Claude está leyendo…</p>';
     if(C.done)h+=`<p class="note-line">${esc(C.done)}</p>`;
   }
@@ -1518,10 +1527,43 @@ function localCapture(text){
     .forEach(c=>{let a=null;try{a=capClause(c,t);}catch(e){console.error(e);}if(a)acts.push(a);else unknown++;});
   return {acts,unknown};
 }
+/* ================= pregúntale a tu app ================= */
+const isQuestion=s=>{s=String(s||'').trim();return /[¿?]/.test(s)||/^(cu[aá]nt[oa]s?|cu[aá]ndo|qu[eé]|cu[aá]l(es)?|c[oó]mo|d[oó]nde|qui[eé]n|por ?qu[eé]|en qu[eé])\s/i.test(s);};
+function askData(q){
+  const f=fold(q),t=todayISO(),ym=ymOf(new Date()),D={hoy:t,dia:DAYS[wdOf(t)-1].toLowerCase(),hora:nowHHMM()},has=re=>re.test(f);
+  const money=has(/gast|pag|compr|dinero|presupuest|ahorr|ingres|cobr|deb|\$|cuest|precio|uber|oxxo|super|cafe|renta|suscrip|categor|cuanto/),
+    hab=has(/habit|racha|duoling|ejercic|lectur|leer|lei|cumpl|dorm|sueno|energ|despert|meta|diario/),
+    sch=has(/entreg|tarea|examen|materia|clase|parcial|actividad|escuela|uni|horario|agenda/),
+    ext=has(/pelicul|serie|libro|lei|calific|estrell|curso|plan de lectura/),all=!(money||hab||sch||ext);
+  if(money||all){const c=pcfg(ym);D.presupuesto={categorias:c.cats.map(x=>({cat:x.name,grupo:x.g,monto:Number(x.amt)||0})),ingresosEsperados:c.income.map(i=>({nombre:i.name,monto:Number(i.amt)||0}))};
+    D.movimientos=Object.keys(S.meses).sort().slice(all?-2:-4).flatMap(k=>(Array.isArray(S.meses[k])?S.meses[k]:[]).map(x=>{const cc=catById(x.cat);return [x.d,x.t,cc?cc.name:'Sin categoría',Math.round(x.amt*100)/100,x.note||''];}));}
+  if(hab||all){D.habitos=habits().filter(h=>!h.archived).map(h=>({id:h.id,nombre:h.name,meta:h.meta||''}));
+    D.dias=Object.keys(S.dias).sort().slice(all?-30:-90).map(d=>{const x=S.dias[d]||{},c=dayCount(d);return {d,habitos:x.habits||{},cumplidos:fmtN(c.done)+'/'+c.counted,sueno:sleepHours(d),durmio:x.durmio||null,desperto:x.wake||null,energia:typeof x.energy==='number'?x.energy:null};});}
+  if(sch||all){D.entregas=S.tareas.map(x=>({titulo:x.titulo,materia:matShort(x.materiaId),fecha:x.fecha,hora:x.hora||'23:59',estado:x.estado||'pendiente',etiqueta:x.etiqueta||''}));
+    D.agenda=[1,2,3,4,5,6,7].map(i=>{const a=agendaFor(addDays(mondayOf(t),i-1))||{};return {dia:DAYS[i-1],despertar:a.despertar||null,bloques:(a.bloques||a.items||[]).map(b=>(b.ini?b.ini+'-'+(b.fin||'')+' ':'')+b.t)};});}
+  if(ext||all){D.extras=S.extras.map(x=>({tipo:x.tipo,titulo:x.titulo,estado:x.estado,calif:x.calif,fin:x.fin||null}));
+    D.planDeLectura={total:LIB.length,terminados:LIB.filter(b=>libSt(b)==='terminado').map(b=>b.title),leyendo:LIB.filter(b=>libSt(b)==='leyendo').map(b=>b.title)};}
+  return D;
+}
+async function askApp(q){
+  const C=S.cap,done=(resp,det)=>{C.res={src:'ask',pregunta:q,respuesta:resp,detalle:det||[],acciones:[]};C.sel=[];C.text='';};
+  if(!S.sample){done('Para responder preguntas necesitas abrir la app desde Claude. Lo que sí puedo hacer aquí es anotar, por ejemplo «Uber 120».');render(true);return;}
+  C.busy=true;render(true);
+  const prompt='Eres el asistente de la app «Mi día» de '+quien()+'. Responde su pregunta usando SOLO estos datos (JSON). Los movimientos vienen como [fecha, tipo, categoría, monto, nota]. '
+    +'Si hace falta sumar, contar o promediar, hazlo con cuidado y da números exactos; el dinero en pesos con formato $1,234. Si los datos no alcanzan, dilo y di qué faltaría. '
+    +'Español de México, en segunda persona, breve y directo. Contesta SOLO con JSON así: {"respuesta":"1 a 3 frases","detalle":["hasta 6 líneas cortas con el desglose; puede ir vacío"]}. '
+    +'Pregunta: «'+q+'». Datos: '+JSON.stringify(askData(q));
+  try{const r=await S.sample.json(prompt,{modelTier:'default',cache:false});
+    if(!r||typeof r.respuesta!=='string'||!r.respuesta.trim())throw {code:'bad_answer'};
+    done(r.respuesta.trim().slice(0,600),(Array.isArray(r.detalle)?r.detalle:[]).filter(x=>typeof x==='string'&&x.trim()).slice(0,6).map(x=>x.trim().slice(0,160)));}
+  catch(e){const c=e&&e.code;toast(c==='not_granted'?'No diste permiso para usar Claude aquí.':(c==='rate_limited'?'Demasiadas consultas; intenta en unos minutos.':'No pude responder eso. Intenta de nuevo.'));if(c==='not_granted')S.sample=null;}
+  finally{C.busy=false;render(true);}
+}
 async function capGo(forceAI){
   const ta=document.getElementById('capIn'),text=String(ta?ta.value:S.cap.text).trim();
   if(!text){toast('Escribe qué quieres anotar.');return;}
   S.cap.text=text;S.cap.done='';
+  if(isQuestion(text))return askApp(text);
   const L=localCapture(text);
   const setRes=(acts,resp,src)=>{acts=acts.slice(0,15).map(capCheck);S.cap.res={respuesta:resp,acciones:acts,src};S.cap.sel=acts.map(a=>!a._bad);};
   /* lo que se entiende completo aquí no gasta tu uso de Claude */
@@ -3351,6 +3393,7 @@ const ACT={
     const t=todayISO();S.hab.day=t;S.hab.week=mondayOf(t);S.hab.view='dia';goTab('habitos');setTimeout(()=>{const x=$('#hBed');if(x)x.scrollIntoView({block:'center',behavior:'smooth'});},260);},
   recapHide:b=>{lsSet('midia:recap',b.dataset.ym);render(true);toast('Listo. Lo tienes completo en Dinero.');},
   recapGo:b=>{S.din.ym=b.dataset.ym;goTab('dinero');},
+  capAgain:()=>{S.cap.res=null;S.cap.sel=[];S.cap.text='';render(true);const ta=$('#capIn');if(ta)ta.focus();},
   hide:b=>{hide(b.dataset.k);render(true);},
   focusAll:()=>{S.hoy.focusAll=!S.hoy.focusAll;render(true);},
   goDin:()=>{S.din.ym=ymOf(new Date());S.din.sub='res';subMonth(S.din.ym);goTab('dinero');},

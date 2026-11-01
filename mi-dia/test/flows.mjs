@@ -421,6 +421,30 @@ await run('Para ti sin Claude', { noSample: true }, async ({ page }) => {
   ok(/Disponible cuando abres la app desde Claude/.test(await page.$eval('.reco', (e) => e.innerText)) && !(await page.$('[data-act="recoAsk"]')), 'sin Claude lo explica en lugar de fallar');
 });
 
+// --- pregúntale a tu app desde la captura rápida ---
+await run('Pregúntale a tu app (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00' }, async ({ page }) => {
+  const ultimo = () => page.evaluate(() => window.__sampleLog.filter((t) => t.includes('Responde su pregunta')).slice(-1)[0] || '');
+  await page.fill('#capIn', '¿Cuánto gasté en Uber este mes?'); await page.click('[data-act="capGo"]'); await wait(page, 400);
+  const qa = await page.$eval('.qa', (e) => e.innerText).catch(() => '');
+  ok(/^¿Cuánto gasté en Uber este mes\?/.test(qa) && /gastaste \$420 en Uber/.test(qa) && /25 oct · \$210/.test(qa), 'responde con el desglose', qa);
+  let pr = await ultimo();
+  ok(/"movimientos"/.test(pr) && /Uber al centro/.test(pr) && !/"entregas"/.test(pr), 'solo manda a Claude los datos de dinero');
+  ok(!(await page.$('[data-act="capApply"]')), 'una pregunta no crea acciones para guardar');
+  await page.click('[data-act="capAgain"]'); await wait(page);
+  ok(await page.$eval('#capIn', (e) => e.value) === '' && !(await page.$('.qa')), '«Otra pregunta» deja el campo listo');
+  await page.fill('#capIn', 'cuántas entregas tengo esta semana'); await page.click('[data-act="capGo"]'); await wait(page, 400);
+  pr = await ultimo();
+  ok(/"entregas"/.test(pr) && /Activity 7: Risk register/.test(pr) && !/"movimientos"/.test(pr), 'sin signos también la reconoce como pregunta y manda lo de la escuela');
+  await page.click('[data-act="capCancel"]'); await wait(page);
+  const antes = await page.evaluate(() => window.__sampleLog.length);
+  await page.fill('#capIn', 'Uber 120'); await page.click('[data-act="capGo"]'); await wait(page, 300);
+  ok(await page.evaluate(() => window.__sampleLog.length) === antes && !!(await page.$('[data-act="capApply"]')), 'lo que no es pregunta se sigue anotando como antes');
+});
+await run('Preguntar sin Claude', { noSample: true }, async ({ page }) => {
+  await page.fill('#capIn', '¿Cuánto gasté hoy?'); await page.click('[data-act="capGo"]'); await wait(page, 300);
+  ok(/necesitas abrir la app desde Claude/.test(await page.$eval('.qa', (e) => e.innerText).catch(() => '')), 'explica que las preguntas necesitan a Claude');
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });

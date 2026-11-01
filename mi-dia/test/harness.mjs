@@ -15,6 +15,7 @@ const SKELETON = '<!doctype html><html><head><meta charset=utf8><meta name=viewp
 const SAMPLE_HANDLER = `window.__sampleHandler = async (text) => {
   await new Promise(r => setTimeout(r, 30));
   if (window.__sampleFail) return { __error: { code: window.__sampleFail } };
+  if (text.includes('Responde su pregunta')) return { respuesta: 'Este mes gastaste $420 en Uber, en 2 viajes.', detalle: ['18 oct · $210 · Uber', '25 oct · $210 · Uber al centro'] };
   if (text.includes('Clasificas los gastos')) return { cat: 'ocio', porque: 'Es un gusto personal' };
   if (text.includes('asistente de la app «Mi día»')) return window.__capNext || { respuesta: 'Entendí un gasto.', acciones: [{ tipo: 'gasto', monto: 120, cat: 'gasolina', nota: 'Uber', fecha: '' }] };
   if (text.includes('recomendador de cine')) return window.__recoNext || { peliculas: [{ titulo: 'Perfect Days', anio: 2023, director: 'Wim Wenders', porque: 'Si te gustó Arrival, esta calma te va a llegar.' }, { titulo: 'El viaje de Chihiro', anio: 2001, porque: 'repetida' }, { titulo: 'Past Lives', anio: 2023, director: 'Celine Song', porque: 'Íntima como tus favoritas.' }], series: [{ titulo: 'Severance', plataforma: 'Apple TV+', porque: 'Misterio con ideas, como Arrival.' }], libro: { id: 'un-mundo-feliz', porque: 'Sigue la línea de 1984.' } };
