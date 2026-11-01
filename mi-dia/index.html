@@ -22,7 +22,7 @@
     --hab:#30D158; --ent:#0A84FF; --din:#FF9F0A; --com:#40C8E0; --spi:#BF5AF2;
     --accent:#0A84FF; --fill:#2C2C2E; --sep:rgba(84,84,88,.65); --seg:rgba(118,118,128,.24); --seg-on:#636366;
     --bar:rgba(22,22,23,.92); --tab-off:#8E8E93; --grab:rgba(235,235,245,.3); --toast:#3A3A3C; --toast-fg:#FFFFFF;
-    --night-bg:#FFFFFF; --night-fg:#000000; --card-shadow:none;
+    --night-bg:#23214A; --night-fg:#ECEBFF; --card-shadow:none;
     --shadow:0 10px 30px rgba(0,0,0,.6);
     color-scheme:dark;
   }
@@ -33,7 +33,7 @@
     --hab:#30D158; --ent:#0A84FF; --din:#FF9F0A; --com:#40C8E0; --spi:#BF5AF2;
     --accent:#0A84FF; --fill:#2C2C2E; --sep:rgba(84,84,88,.65); --seg:rgba(118,118,128,.24); --seg-on:#636366;
     --bar:rgba(22,22,23,.92); --tab-off:#8E8E93; --grab:rgba(235,235,245,.3); --toast:#3A3A3C; --toast-fg:#FFFFFF;
-    --night-bg:#FFFFFF; --night-fg:#000000; --card-shadow:none;
+    --night-bg:#23214A; --night-fg:#ECEBFF; --card-shadow:none;
     --shadow:0 10px 30px rgba(0,0,0,.6);
     color-scheme:dark;
 }
@@ -763,6 +763,13 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .recap .rlead{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px}
 .recap .rlead b{font-weight:800}.recap .rlead b.neg{color:var(--late)}
 .recap .ins{margin-top:12px}.recap .btnrow{margin-top:12px}
+.pain{border-radius:12px;background:color-mix(in srgb,var(--late) 9%,transparent);padding:10px 12px;margin:0 0 12px;font-size:15px;line-height:1.4}
+.pain p{margin:0}.pain .safe{margin-top:6px;font-size:13px;color:var(--muted)}
+.mrows{margin:0;display:grid;gap:0}
+.mrows>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;padding:9px 0;align-items:baseline}
+.mrows>div+div{background-image:linear-gradient(var(--sep),var(--sep));background-repeat:no-repeat;background-size:100% .5px;background-position:left top}
+.mrows dt{font-size:13px;color:var(--muted);font-weight:600}
+.mrows dd{margin:0;font-size:15px;line-height:1.4}
 .sguess{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 4px;padding:8px 8px 8px 12px;border-radius:12px;background:var(--fill);font-size:15px}
 .burst{position:fixed;width:0;height:0;pointer-events:none;z-index:80}
 .burst i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;animation:burst 1s cubic-bezier(.15,.75,.3,1) forwards}
@@ -1137,6 +1144,7 @@ function nowCard(t){
   const ag=agendaFor(t),open=S.hoy.agendaOpen;
   if(!ag)return `<section class="now"><p class="now-k">Ahora</p><h2 class="now-t">${S.cfgReady?'Sin agenda':'Cargando…'}</h2></section>`;
   const foot=acts=>`<div class="nfoot">${acts||''}<button class="link" type="button" data-act="agenda" aria-expanded="${open}">${open?'Ocultar agenda':'Ver agenda'}</button></div>`;
+  if(ag.flexible&&nowMin()>=1200)return `<section class="now night"><p class="now-k">${esc(DAYS[wdOf(t)-1])} sin horario fijo</p><h2 class="now-t">Buenas noches</h2><p class="now-s">${esc(sleepLine(t))}</p>${foot()}</section>`;
   if(ag.flexible){
     const main=(ag.items||[]).filter(i=>!/^(Duolingo|Desayuno|Comida|Cena|Ocio|Lectura|Mochila|Tareas)/i.test(i.t)).map(i=>i.t.toLowerCase());
     return `<section class="now"><p class="now-k">${esc(DAYS[wdOf(t)-1])} sin horario fijo</p><h2 class="now-t">Día flexible</h2><p class="now-s">Hoy toca ${esc(listJoin(main))}.</p>${foot()}</section>`;
@@ -1163,6 +1171,14 @@ function blockActs(x,t,rr){
   if(rr)a+=`<button type="button" class="nbtn alt" data-act="rutHoy" data-id="${esc(rr.id)}">Ver rutina</button>`;
   return a;
 }
+/* de noche: a qué hora acostarte según lo que toca mañana y tu deuda de sueño */
+function sleepLine(t){
+  const tw=wakeGoal(addDays(t,1)),min=fmtN(minSleep());
+  if(!tw)return `Mañana no tienes hora fija para despertar: procura dormir ${min} h.`;
+  const b=bedtimeTonight(sleepDebt(mondayOf(t)).sum),bm=toMin(b.hora),late=bm!=null&&(bm<720?bm+1440:bm)<=nowMin();
+  return late?`Mañana despiertas a las ${fmtT(b.wake)}. Ya pasó tu hora ideal (${b.hora}): entre más pronto te duermas, mejor.`
+    :`Mañana despiertas a las ${fmtT(b.wake)}: para dormir ${min} h${b.extra?' y recuperar '+b.extra+' min':''}, acuéstate a las ${b.hora}.`;
+}
 /* de noche: a qué hora acostarte para recuperar sueño, solo si todavía estás a tiempo */
 function bedTip(t){
   const db=sleepDebt(mondayOf(t));if(!db.n||db.sum>-0.5)return '';
@@ -1187,7 +1203,7 @@ function agendaCard(t){
 /* ================= HOY ================= */
 function vHoy(){
   const t=todayISO(),m=nowMin();
-  let h=header('Hoy',esc(cap(longDate(t))+' · '+saludo()+(nombre()?', '+nombre():'')))+dayTiles(t)+nowCard(t)+(S.hoy.agendaOpen?agendaCard(t):'')+focusCard(t)+recapCard(t)+capCard()+hoyHabitos(t);
+  let h=header('Hoy',esc(cap(longDate(t))+' · '+saludo()+(nombre()?', '+nombre():'')))+dayTiles(t)+nowCard(t)+(S.hoy.agendaOpen?agendaCard(t):'')+mananaCard(t)+focusCard(t)+recapCard(t)+capCard()+hoyHabitos(t);
   /* el resto se acomoda según la hora y lo que ya resolviste hoy */
   const a=window.__arm&&window.__arm.ctx?window.__arm.ctx():null,ej=habits().find(x=>x.id==='ejercicio');
   const ejDone=ej&&plannedOn(ej,t)&&hState(t,ej)==='hecho',ejToday=typeof rutinasDe==='function'&&rutinasDe(wdOf(t)).length>0;
@@ -1220,6 +1236,22 @@ function dayTiles(t){
         cap:!allow?'Presupuesto agotado':(hoy>allow?'Te pasaste '+money(hoy-allow):(hoy?'Llevas '+money(hoy):'De '+money(allow)+' al día')),go:{act:'go',tab:'dinero'}});}}
   if(!out.length)return '';
   return '<section class="kts" aria-label="Tu día">'+out.map(x=>`<button type="button" class="kt" ${dataAttrs(x.go)} aria-label="${esc((x.ka||x.k)+': '+x.v+'. '+x.cap)}"><span class="kl">${esc(x.k)}</span><span class="kv">${esc(x.v)}</span><span class="km" style="--f:${x.f}"><i style="width:${Math.round(Math.max(0,Math.min(1,x.p))*100)}%"></i></span><span class="kc">${esc(x.cap)}</span></button>`).join('')+'</section>';
+}
+/* ================= de noche: mañana en una sola tarjeta ================= */
+function mananaCard(t){
+  if(nowMin()<1170||!S.cfgReady||!S.diasReady)return '';
+  const d=addDays(t,1),ag=agendaFor(d),rows=[];
+  if(ag&&!ag.flexible&&(ag.bloques||[]).length){const f=ag.bloques[0];rows.push(['Agenda',`Empiezas a las ${fmtT(f.ini)} con ${lc1(f.t)}`]);}
+  else if(ag&&ag.flexible){const main=(ag.items||[]).filter(i=>!/^(Duolingo|Desayuno|Comida|Cena|Ocio|Lectura|Mochila|Tareas)/i.test(i.t)).map(i=>i.t.toLowerCase());if(main.length)rows.push(['Agenda','Día flexible: '+listJoin(main)]);}
+  if(S.cfg.plan&&started(d)){const hs=habits().filter(h=>!h.archived&&plannedOn(h,d)),nu=hs.filter(h=>!plannedOn(h,t)).map(h=>h.name);
+    if(hs.length)rows.push(['Hábitos',`${hs.length} ${hs.length===1?'hábito':'hábitos'}${nu.length?', entre ellos '+listJoin(nu):''}`]);}
+  const rs=rutinasDe(wdOf(d)).map(o=>rutById(o.rutina)).filter(Boolean);
+  if(rs.length){const pn=painNote(t);rows.push(['Ejercicio',rs.map(r=>r.nombre).join(', ')+(pn?' (ojo con el dolor)':'')]);}
+  const o=window.__arm&&window.__arm.dia?window.__arm.dia(d):null;
+  if(o)rows.push(['Ropa',(o.ocasion?o.ocasion+': ':'')+o.prendas.slice(0,3).join(', ')+(o.prendas.length>3?'…':'')]);
+  const ds=((S.cfg.menu||{}).dias||{})[String(wdOf(d))];if(ds&&ds.desayuno&&ds.desayuno.t)rows.push(['Desayuno',ds.desayuno.t]);
+  if(!rows.length)return '';
+  return `<section class="card manana" style="--c:var(--accent)"><div class="ch"><h2>Mañana, ${esc(DAYS[wdOf(d)-1].toLowerCase())} ${parse(d).getDate()}</h2></div><dl class="mrows">${rows.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>`;
 }
 /* ================= así cerró el mes: aparece los primeros 3 días del siguiente ================= */
 function recapCard(t){
@@ -1263,6 +1295,9 @@ function focusItems(t){
   if(S.tareasReady)pendientes().forEach(x=>{const b=bucket(x);
     if(b==='late'||b==='today')add(b==='late'?100:86,{c:matColor(x.materiaId),t:x.titulo||'Sin título',s:(b==='late'?'Venció ':'Vence ')+lc1(dueText(x))+' · '+matShort(x.materiaId),go:{act:'tarea',id:x.id},b:{act:'tcheck',id:x.id,label:'Entregada'}});
     else if(b==='tomorrow'&&m>=1080)add(58,{c:matColor(x.materiaId),t:x.titulo||'Sin título',s:'Mañana, '+(x.hora||'23:59')+' · '+matShort(x.materiaId),go:{act:'tarea',id:x.id},b:{act:'tcheck',id:x.id,label:'Entregada'}});});
+  // dolor anotado los últimos días y hoy toca entrenar
+  if(S.diasReady&&S.cfgReady&&rutinasDe(wd).length&&!isHidden('dolor')){const pn=painNote(t),ej=habits().find(x=>x.id==='ejercicio');
+    if(pn&&!(ej&&hState(t,ej)==='hecho'))add(m<720?82:48,{c:'var(--late)',t:'Ojo con el dolor de '+painWhen(pn),s:painAdvice(t,pn),go:{act:'go',tab:'ejercicio'},x:'dolor'});}
   // sueño de anoche (si tu reloj no lo mandó todavía)
   if(S.diasReady&&S.cfg.plan&&started(t)&&!locked(t)&&!day.wake){const wk=toMin(ag.despertar);if(m>=(wk==null?360:wk)-60&&m<840)add(92,{c:'var(--spi)',t:'¿Cómo dormiste?',s:S.syncSueno?'Tu iPhone no ha mandado la noche de hoy. Revisa las horas y guarda.':'Ajusta las horas si hace falta y guarda.',form:sleepForm(t)});}
   // nunca falles dos veces
@@ -2768,6 +2803,31 @@ function rutBox(r,scope,label){
   const key=scope+':'+r.id,open=openRut.has(key);
   return `<div class="rut${open?' open':''}" id="rut-${esc(scope)}-${esc(r.id)}"><button type="button" class="rut-h" data-act="rut" data-key="${esc(key)}" aria-expanded="${open}"><span><span class="rn">${esc(r.nombre)}</span><span class="rm">${esc([label,r.sub,r.dur].filter(Boolean).join(', '))}</span></span><span class="chev" aria-hidden="true">›</span></button>${open?`<div class="rut-b">${rutDetail(r,scope)}</div>`:''}</div>`;
 }
+/* ================= dolor anotado: el ejercicio de los próximos días se adapta ================= */
+const PAIN_RE=/\b(me duelen?|dolor|adolorid|lesi[oó]n|lastim|torc[ií]|esguince|calambre|contractura|tir[oó]n|inflamad)/i;
+const LEGS_RE=/pierna|rodilla|cadera|banda|iliotibial|tobillo|\bpies?\b|gemelo|pantorrilla|cu[aá]driceps|isquio|gl[uú]te|ingle|espinilla/i;
+const UPPER_RE=/hombro|brazo|codo|mu[ñn]eca|espalda|cuello|pecho|b[ií]ceps|tr[ií]ceps|dorsal/i;
+const PAIN_SAFE='Si el dolor es fuerte, punzante o no mejora en unos días, que te revise un médico o fisio.';
+function painNote(t){
+  for(let k=0;k<=2;k++){const d=addDays(t,-k),x=S.dias[d];if(!x)continue;
+    const txt=[x.note||''].concat(Object.values(x.hnote||{}).map(o=>(o&&o.nota)||'')).join('. ');
+    const cl=txt.split(/[.!?\n;]+|,\s*/).map(s=>s.trim()).filter(s=>PAIN_RE.test(s));if(!cl.length)continue;
+    const all=cl.join(' '),best=cl.find(s=>LEGS_RE.test(s)||UPPER_RE.test(s))||cl[0];
+    return {d,k,txt:best.length>110?best.slice(0,107).trim()+'…':best,legs:LEGS_RE.test(all),upper:UPPER_RE.test(all)};}
+  return null;
+}
+function painAdvice(t,p){
+  const r=rutinasDe(wdOf(t)).map(o=>rutById(o.rutina)).filter(Boolean)[0];
+  if(!r)return 'Hoy no tienes rutina: descansa y muévete suave.';
+  const id=r.nombre+' '+(r.sub||''),ex=(r.bloques||[]).flatMap(b=>(b.ejercicios||[]).map(e=>e.t||'')).join(' ');
+  const leg=/inferior|pierna|cadena posterior|cu[aá]driceps|gl[uú]te|sentadilla/i.test(id),up=/superior|empuje|jal[oó]n|tracci|hombro|pecho|espalda/i.test(id),jumps=/salt|cuerda|burpee|correr|carrera|trote/i.test(ex);
+  if(p.legs&&leg)return `Hoy toca ${r.nombre}: no la fuerces. Mejor movilidad suave o pásala a otro día.`;
+  if(p.upper&&up)return `Hoy toca ${r.nombre}: bájale al peso o cámbiala por movilidad.`;
+  if(p.legs)return `Hoy toca ${r.nombre}: puedes entrenar${jumps?', pero sin saltos ni cuerda':' cuidando las piernas'}.`;
+  if(p.upper)return `Hoy toca ${r.nombre}: puedes entrenar, cuidando la zona que te duele.`;
+  return `Hoy toca ${r.nombre}: escucha a tu cuerpo y bájale si molesta.`;
+}
+const painWhen=p=>p.k===0?'hoy':(p.k===1?'ayer':'el '+DAYS[wdOf(p.d)-1].toLowerCase());
 function hoyEjercicio(t){
   const e=eje();if(!e||!(e.rutinas||[]).length)return '';
   const wd=wdOf(t),list=rutinasDe(wd).map(x=>({x,r:rutById(x.rutina)})).filter(o=>o.r);
@@ -2775,6 +2835,8 @@ function hoyEjercicio(t){
   if(list.length)body=list.map(o=>{const hr=ejHora(t,o.x);return rutBox(o.r,'hoy',hr?'A las '+fmtT(hr):'');}).join('');
   else{const op=opcionalDe(wd);
     body=op.rutinas.length?`<p class="empty" style="margin-bottom:10px">Hoy descansas. Opcional, si te sobra tiempo${op.nota?': '+esc(op.nota.charAt(0).toLowerCase()+op.nota.slice(1)):'.'}</p>${op.rutinas.map(r=>rutBox(r,'hoy','')).join('')}`:'<p class="empty">Hoy descansas.</p>';}
+  const pn=painNote(t);
+  if(pn)body=`<div class="pain"><p><b>Anotaste dolor ${esc(painWhen(pn))}:</b> «${esc(pn.txt)}». ${esc(painAdvice(t,pn))}</p><p class="safe">${esc(PAIN_SAFE)}</p></div>`+body;
   return `<section class="card" style="--c:var(--hab)"><div class="ch"><h2>Ejercicio</h2><button class="link" type="button" data-act="go" data-tab="ejercicio">Semana</button></div>${body}</section>`;
 }
 function vEje(){
@@ -3356,6 +3418,7 @@ window.__midia={agendaFor:d=>agendaFor(d),money:n=>money(n),quien:f=>quien(f),no
   addGasto:o=>{const ym=ymOf(new Date());if(!S.db||!Array.isArray(S.meses[ym])||!(o.amt>0))return false;const t={id:newId(),t:'gasto',cat:pcfg(ym).cats.some(c=>c.id===o.cat)?o.cat:'',amt:Math.round(o.amt*100)/100,note:String(o.note||''),d:todayISO()};if(!t.cat)t.src='armario';return addTx(ym,t);}};
 const dataPing=()=>{try{window.dispatchEvent(new Event('midia:data'));}catch{}};
 window.addEventListener('arm:go',()=>goTab('armario'));
+window.addEventListener('arm:data',()=>{if(S.tab==='hoy'&&nowMin()>=1170)render();});
 $('#fab').addEventListener('click',()=>{if(S.tab==='entregas')openTarea(null);else if(S.tab==='dinero')openMov({ym:S.din.ym});else if(S.tab==='extras'&&S.ext.sub!=='plan')openExt(null);});
 
 /* ================= hojas ================= */
@@ -3567,6 +3630,7 @@ function onSnap(name,snap){
     if(d){var n=clone(d);if(JSON.stringify(n)!==JSON.stringify(S[name])){S[name]=n;normalize();scheduleRender()}}
   }
   if(!ready&&DOCS.every(function(k){return loaded[k]})){ready=true;render()}
+  if(name==='plan'||name==='inv'){try{window.dispatchEvent(new Event('arm:data'))}catch(e){}}
 }
 function normalize(){
   if(!S.inv||!Array.isArray(S.inv.items))S.inv={items:[]};
@@ -4322,6 +4386,7 @@ onRoots('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='ch
 window.__arm={
   ctx:function(){var c=cyc(),t=today(),o=c&&c.outfits[t];return {cycle:!!(c&&cycDates(c).indexOf(t)>=0),hoy:o?o.items.map(function(id){var it=byId(id);return it?id+' '+it.name:id}):[],hecho:!!(o&&o.hecho),prendas:items().filter(planUsable).map(function(it){return it.id+' | '+it.name+' | '+(it.corte||'')+' | '+(it.color||'')})}},
   name:function(id){var it=byId(id);return it?it.name:null},
+  dia:function(d){var c=cyc(),o=c&&c.outfits&&c.outfits[d];if(!o||!o.items||!o.items.length)return null;return {ocasion:o.ocasion||'',prendas:o.items.map(function(id){var it=byId(id);return it?it.name:null}).filter(Boolean),hecho:!!o.hecho}},
   assign:function(ids,salir){var c=cyc();if(!c)return false;var t=today();if(cycDates(c).indexOf(t)<0)return false;var k=t+(salir?'@salir':'');if(salir){c.salir=c.salir||{};c.salir[t]=true}if(!applyAssign(c,k,(ids||[]).map(String),'Desde la captura rápida'))return false;save('plan');render();return true},
   markUsed:function(salir){var c=cyc();if(!c)return false;var k=today()+(salir?'@salir':''),o=c.outfits[k];if(!o||o.hecho||!o.items.length)return false;A['day-done']({f:k});return true},
   week:function(mon){var c=cyc(),r={hayCiclo:!!c};if(!c)return r;var ds=[];for(var i=0;i<7;i++)ds.push(addD(mon,i));var ks=Object.keys(c.outfits||{}).filter(function(k){return ds.indexOf(dateOf(k))>=0});
