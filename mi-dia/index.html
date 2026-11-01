@@ -2316,8 +2316,11 @@ function catsView(tx){
   if(c.income.length){
     const plan=sumAmt(c.income),got=c.income.reduce((s,i)=>s+(recv[i.id]||0),0);
     h+=`<section class="bg" style="--c:var(--ok)"><div class="bgh"><h2>Ingresos</h2><span class="num">${money(got)} de ${money(plan)}</span></div>`;
-    c.income.forEach(i=>{const r=recv[i.id]||0,p=i.amt?Math.min(100,r/i.amt*100):0,f=i.amt-r;
-      h+=`<div class="brow"><div class="top"><span class="nm">${esc(i.name)}</span><span class="v">${money(r)} <span class="of">/ ${money(i.amt)}</span></span></div>${i.note?`<div class="bnote">${esc(i.note)}</div>`:''}<div class="bbar"><i style="width:${p}%;background:var(--ok)"></i></div><div class="bbot">${f>0?`<span>Falta recibir ${money(f)}</span><button class="pill" type="button" data-act="quick" data-kind="ingreso" data-id="${esc(i.id)}">${i.sem>0?'Recibí el pago':'Recibido'}</button>`:'<span class="donetxt">Completo</span>'}</div></div>`;});
+    c.income.forEach(i=>{const r=recv[i.id]||0,p=i.amt?Math.min(100,r/i.amt*100):0,f=i.amt-r,vr=!(Number(i.amt)>0);
+      /* ingreso sin monto fijo (monto 0): llega cuando llega; con «lo que sobra», lo que entre va a tu ahorro */
+      const bot=vr?`<span>${ri?'Lo que llegue se suma a tu ahorro':'Sin monto fijo'}</span><button class="pill" type="button" data-act="incOpen" data-id="${esc(i.id)}">Registrar</button>`
+        :(f>0?`<span>Falta recibir ${money(f)}</span><button class="pill" type="button" data-act="quick" data-kind="ingreso" data-id="${esc(i.id)}">${i.sem>0?'Recibí el pago':'Recibido'}</button>`:'<span class="donetxt">Completo</span>');
+      h+=`<div class="brow"><div class="top"><span class="nm">${esc(i.name)}</span><span class="v">${money(r)}${vr?'':` <span class="of">/ ${money(i.amt)}</span>`}</span></div>${i.note?`<div class="bnote">${esc(i.note)}</div>`:''}${vr?'':`<div class="bbar"><i style="width:${p}%;background:var(--ok)"></i></div>`}<div class="bbot">${bot}</div></div>`;});
     h+='</section>';
   }
   GROUPS.forEach(g=>{
@@ -2409,11 +2412,11 @@ function openMov(opts){
   if(!needDb())return;
   if(!pcfg().cats.length){S.tab='dinero';S.din.sub='budget';render(true);return;}
   vYm=opts.ym||ymOf(new Date());subMonth(vYm);
-  vTipo='gasto';fillMovCats();if(opts.cat&&catById(opts.cat))$('#vCat').value=opts.cat;updHint();
+  vTipo=opts.tipo==='ingreso'?'ingreso':'gasto';fillMovCats();if(opts.cat&&(vTipo==='ingreso'?incById(opts.cat):catById(opts.cat)))$('#vCat').value=opts.cat;updHint();
   $('#vMonto').value='';$('#vMonto').dataset.auto='';$('#vDesc').value=opts.note||'';$('#vErr').textContent='';updHint();
   const b=monthBounds(vYm),f=$('#vFecha');f.min=b.min;f.max=b.max;f.value=defaultDate(vYm);
   $('#vGuardar').disabled=false;
-  openSheet('#shMov');setTimeout(()=>$('#vDesc').focus(),240);
+  openSheet('#shMov');setTimeout(()=>$(vTipo==='ingreso'&&opts.cat?'#vMonto':'#vDesc').focus(),240);
 }
 const norm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const KW={lavanderia:['lavanderia','lavado de ropa','tintoreria','lavar ropa'],gasolina:['gasolina','gas ','carga de gas','pemex','combustible'],super:['super','walmart','soriana','chedraui','bodega aurrera','aurrera','costco','sams','despensa','mercado'],
@@ -3602,6 +3605,7 @@ const ACT={
   delTx:b=>{const ym=S.din.ym,tx=S.meses[ym]||[],t=tx.find(x=>x.id===b.dataset.id);if(!t)return;saveTx(ym,tx.filter(x=>x.id!==t.id));render(true);
     toast('Movimiento eliminado',()=>{saveTx(ym,[...(S.meses[ym]||[]),t]);render(true);});},
   movOpen:b=>openMov({ym:S.tab==='dinero'?S.din.ym:null,cat:b.dataset.cat,note:b.dataset.note}),
+  incOpen:b=>openMov({ym:S.din.ym,tipo:'ingreso',cat:b.dataset.id}),
   addInc:()=>{S.din.draft.income.push({id:newId(),name:'',amt:0});S.din.dirty=true;render(true);const ins=document.querySelectorAll('[data-k="income"][data-f="name"]');if(ins.length)ins[ins.length-1].focus();},
   rmRow:b=>{S.din.draft[b.dataset.k].splice(Number(b.dataset.i),1);S.din.dirty=true;render(true);},
   addCat:()=>{const name=$('#nName').value.trim(),g=$('#nGroup').value,amt=Number($('#nAmt').value)||0;if(!name){$('#nName').focus();return;}

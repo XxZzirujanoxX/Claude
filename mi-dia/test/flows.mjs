@@ -549,6 +549,20 @@ await run('Ahorro en riesgo (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06
   const lead = await page.$eval('.fc-lead', (e) => ({ t: e.innerText, over: e.classList.contains('over') }));
   ok(/A este ritmo van \$[\d,]+ a Ahorro para viajes este mes: \$[\d,]+ menos que tu plan/.test(lead.t) && lead.over, 'el pronóstico dice cuánto te faltaría y se pinta de alerta', lead);
 });
+await run('Ingreso sin monto fijo (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00', seed: (() => { const sd = viajes('2026-10-30'); sd['config/presupuesto'].income.push({ id: 'outlier', name: 'Outlier', amt: 0, note: 'Sin monto ni fecha fijos' }); return sd; })() }, async ({ page }) => {
+  await tab(page, 'dinero'); await wait(page, 300);
+  const before = Number(((await page.$eval('#view', (e) => e.innerText)).match(/a este ritmo van \$([\d,]+)/) || [])[1]?.replace(/,/g, ''));
+  await page.click('[data-act="dsub"][data-sub="cats"]'); await wait(page, 200);
+  const cv = await page.$eval('#view', (e) => e.innerText);
+  ok(/Outlier\s*\$0\s*Sin monto ni fecha fijos\s*Lo que llegue se suma a tu ahorro\s*Registrar/.test(cv) && !/Outlier[\s\S]{0,40}Completo/.test(cv), 'un ingreso sin monto fijo no sale como «Completo»', cv.slice(cv.indexOf('Outlier'), cv.indexOf('Outlier') + 120));
+  await page.click('[data-act="incOpen"][data-id="outlier"]'); await wait(page, 400);
+  ok(await page.$eval('#vCat', (e) => e.value) === 'outlier' && /ingreso/i.test(await page.$eval('#vGuardar', (e) => e.textContent)) && await page.evaluate(() => document.activeElement && document.activeElement.id) === 'vMonto', 'Registrar abre el ingreso con Outlier elegido y el cursor en el monto');
+  await page.fill('#vMonto', '350'); await page.click('#vGuardar'); await wait(page, 400);
+  const t = (await txOf(page, '2026-10')).slice(-1)[0];
+  ok(t.t === 'ingreso' && t.cat === 'outlier' && t.amt === 350, 'se guarda como ingreso de Outlier', t);
+  const after = Number(((await page.$eval('#view', (e) => e.innerText)).match(/a este ritmo van \$([\d,]+)/) || [])[1]?.replace(/,/g, ''));
+  ok(after === before + 350, 'lo que llega se suma a tu ahorro', { before, after });
+});
 const viajesNov = () => { const sd = viajes('2026-11-01'); sd['meses/2026-11'] = { tx: [{ id: 'n1', t: 'ingreso', cat: 'papa', amt: 20000, note: '', d: '2026-11-01' }] }; return sd; };
 await run('Lo que sobró de octubre (dom 1 nov 9:00)', { time: '2026-11-01T09:00:00-06:00', seed: viajesNov() }, async ({ page }) => {
   const oct = await txOf(page, '2026-10'), sob = oct.reduce((s, t) => s + (t.t === 'ingreso' ? t.amt : -t.amt), 0);
