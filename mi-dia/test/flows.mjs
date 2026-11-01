@@ -541,6 +541,14 @@ await run('Lo que sobra va a viajes (vie 30 oct 13:00)', { time: '2026-10-30T13:
   const cfg = await store(page, 'config/presupuesto'), g = (id) => cfg.cats.find((c) => c.id === id);
   ok(g('ahorro').resto === true && g('ahorro').amt === 6567 && g('comidas').tope === 600 && g('ocio').tope === 800 && g('ocio').amt === 3500 && !('tope' in g('super')), 'se guarda: lo que sobra, su monto del mes y los topes', cfg.cats);
 });
+await run('Ahorro en riesgo (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00', seed: (() => { const sd = viajes('2026-10-30'); sd['meses/2026-10'].tx.push({ id: 'big', t: 'gasto', cat: 'ocio', amt: 7000, note: 'Viaje de fin de semana', d: '2026-10-20' }); return sd; })() }, async ({ page }) => {
+  if (await page.$('.focus [data-act="focusAll"]')) { await page.click('.focus [data-act="focusAll"]'); await wait(page); }
+  const focus = await page.$eval('.focus', (el) => el.innerText).catch(() => '');
+  ok(/A este ritmo no llegas a tu ahorro[\s\S]{0,10}Van \$[\d,]+ de \$7,067 para Ahorro para viajes/.test(focus), 'avisa en «Para ahora» si no vas a llegar a tu ahorro', focus);
+  await tab(page, 'dinero'); await wait(page, 300);
+  const lead = await page.$eval('.fc-lead', (e) => ({ t: e.innerText, over: e.classList.contains('over') }));
+  ok(/A este ritmo van \$[\d,]+ a Ahorro para viajes este mes: \$[\d,]+ menos que tu plan/.test(lead.t) && lead.over, 'el pronóstico dice cuánto te faltaría y se pinta de alerta', lead);
+});
 const viajesNov = () => { const sd = viajes('2026-11-01'); sd['meses/2026-11'] = { tx: [{ id: 'n1', t: 'ingreso', cat: 'papa', amt: 20000, note: '', d: '2026-11-01' }] }; return sd; };
 await run('Lo que sobró de octubre (dom 1 nov 9:00)', { time: '2026-11-01T09:00:00-06:00', seed: viajesNov() }, async ({ page }) => {
   const oct = await txOf(page, '2026-10'), sob = oct.reduce((s, t) => s + (t.t === 'ingreso' ? t.amt : -t.amt), 0);

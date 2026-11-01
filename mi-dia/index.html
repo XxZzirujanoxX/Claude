@@ -1394,6 +1394,9 @@ function focusItems(t){
     const rs=routineSpend(t,tx);if(rs&&!isHidden('rs:'+rs.cat))add(60,{c:'var(--din)',t:rs.t,s:rs.s,b:{act:'rspend',cat:rs.cat,amt:rs.amt,note:rs.note,label:'Registrar'},x:'rs:'+rs.cat});
     const nc=tx.filter(x=>x.t==='gasto'&&x.src&&!catById(x.cat)).length;
     if(nc)add(night?42:55,{c:'var(--soon)',t:nc===1?'1 compra sin categoría':nc+' compras sin categoría',s:'Llegaron solas. Elige su categoría una vez y la app la recuerda.',b:{act:'goDin',label:'Clasificar'}});
+    /* tu ahorro es lo que sobra: si a este ritmo no llegas a tu plan, avisa (desde el día 7, cuando el ritmo ya dice algo) */
+    const fr=forecast(ym,tx),gp=fcGap(fr);
+    if(fr.r&&fr.day>=7&&gp>=100&&!isHidden('ahorro'))add(night?40:52,{c:'var(--soon)',t:'A este ritmo no llegas a tu ahorro',s:'Van '+money(Math.max(0,fr.end))+' de '+money(Number(fr.r.amt)||0)+' para '+fr.r.name+'.',go:{act:'go',tab:'dinero'},x:'ahorro'});
     topesSemana(mondayOf(t)).filter(g=>g.warn||g.lost).forEach(g=>add(50,{c:g.lost?'var(--late)':'var(--soon)',t:g.lost?'Te pasaste en '+g.catName:g.catName+': casi en tu tope',s:money(g.sp)+' de '+money(g.max)+' esta semana'+(g.lost?'':' · te quedan '+money(g.max-g.sp)),go:{act:'go',tab:'dinero'}}));
   }
   // congelador: en la mañana o en la noche, según tu menú
@@ -2566,8 +2569,10 @@ function forecast(ym,tx){
   return {day,dim,frac,varNow,varProj,varBud,end:incProj-fixed-varProj,vs,r};
 }
 /* con «lo que sobra», el final del mes no queda «libre»: va a tu ahorro */
+/* cuánto te faltaría para el plan de tu ahorro (lo que sobra) a este ritmo */
+const fcGap=f=>f.r?Math.round((Number(f.r.amt)||0)-Math.max(0,f.end)):0;
 const fcText=(f,mn,b)=>{const B=s=>b?`<b class="num">${s}</b>`:s;
-  if(f.r)return f.end>=0?`A este ritmo van ${B(money(f.end))} a ${esc(f.r.name)} este mes.`:`A este ritmo cierras ${mn} con ${B(money(-f.end))} en contra y nada para ${esc(f.r.name)}.`;
+  if(f.r){const gap=fcGap(f);return f.end>=0?`A este ritmo van ${B(money(f.end))} a ${esc(f.r.name)} este mes${gap>=50?': '+money(gap)+' menos que tu plan':''}.`:`A este ritmo cierras ${mn} con ${B(money(-f.end))} en contra y nada para ${esc(f.r.name)}.`;}
   return `A este ritmo cierras ${mn} con ${B(money(Math.abs(f.end)))} ${f.end<0?'en contra':'libres'}.`;};
 function paceNotes(ym,f){
   const out=[],prev=S.meses[prevYm(ym)],pm=MONTHS[parse(prevYm(ym)+'-01').getMonth()].toLowerCase(),vars=pcfg().cats.filter(x=>x.g==='var');
@@ -2580,7 +2585,7 @@ function paceNotes(ym,f){
 function forecastCard(ym,tx){
   const f=forecast(ym,tx),mn=MONTHS[parse(ym+'-01').getMonth()].toLowerCase(),notes=paceNotes(ym,f);
   return `<section class="card" style="--c:var(--din)"><div class="ch"><h2>Pronóstico del mes</h2><span class="aside num">día ${f.day} de ${f.dim}</span></div>
-    <p class="fc-lead${f.end<0?' over':''}">${fcText(f,mn,true)}</p>
+    <p class="fc-lead${f.end<0||fcGap(f)>=50?' over':''}">${fcText(f,mn,true)}</p>
     <div class="fc-row num"><span>Variables: llevas ${money(f.varNow)}</span><span>van para ${money(f.varProj)} de ${money(f.varBud)}</span></div>
     ${f.r?`<div class="fc-row num"><span>${esc(f.r.name)}: tu plan ${money(Number(f.r.amt)||0)}</span><span>${(sums(tx).spent[f.r.id]||0)?'apartado '+money(sums(tx).spent[f.r.id]):'lo apartas al final'}</span></div>`:''}
     ${f.day<7?'<p class="muted small" style="margin:0">Con pocos días del mes, la estimación se apoya en tu presupuesto.</p>':''}
