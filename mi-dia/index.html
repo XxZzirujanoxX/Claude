@@ -763,8 +763,6 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .recap .rlead{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px}
 .recap .rlead b{font-weight:800}.recap .rlead b.neg{color:var(--late)}
 .recap .ins{margin-top:12px}.recap .btnrow{margin-top:12px}
-.pain{border-radius:12px;background:color-mix(in srgb,var(--late) 9%,transparent);padding:10px 12px;margin:0 0 12px;font-size:15px;line-height:1.4}
-.pain p{margin:0}.pain .safe{margin-top:6px;font-size:13px;color:var(--muted)}
 .mrows{margin:0;display:grid;gap:0}
 .mrows>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;padding:9px 0;align-items:baseline}
 .mrows>div+div{background-image:linear-gradient(var(--sep),var(--sep));background-repeat:no-repeat;background-size:100% .5px;background-position:left top}
@@ -1246,7 +1244,7 @@ function mananaCard(t){
   if(S.cfg.plan&&started(d)){const hs=habits().filter(h=>!h.archived&&plannedOn(h,d)),nu=hs.filter(h=>!plannedOn(h,t)).map(h=>h.name);
     if(hs.length)rows.push(['Hábitos',`${hs.length} ${hs.length===1?'hábito':'hábitos'}${nu.length?', entre ellos '+listJoin(nu):''}`]);}
   const rs=rutinasDe(wdOf(d)).map(o=>rutById(o.rutina)).filter(Boolean);
-  if(rs.length){const pn=painNote(t);rows.push(['Ejercicio',rs.map(r=>r.nombre).join(', ')+(pn?' (ojo con el dolor)':'')]);}
+  if(rs.length)rows.push(['Ejercicio',rs.map(r=>r.nombre).join(', ')]);
   const o=window.__arm&&window.__arm.dia?window.__arm.dia(d):null;
   if(o)rows.push(['Ropa',(o.ocasion?o.ocasion+': ':'')+o.prendas.slice(0,3).join(', ')+(o.prendas.length>3?'…':'')]);
   const ds=((S.cfg.menu||{}).dias||{})[String(wdOf(d))];if(ds&&ds.desayuno&&ds.desayuno.t)rows.push(['Desayuno',ds.desayuno.t]);
@@ -1295,9 +1293,6 @@ function focusItems(t){
   if(S.tareasReady)pendientes().forEach(x=>{const b=bucket(x);
     if(b==='late'||b==='today')add(b==='late'?100:86,{c:matColor(x.materiaId),t:x.titulo||'Sin título',s:(b==='late'?'Venció ':'Vence ')+lc1(dueText(x))+' · '+matShort(x.materiaId),go:{act:'tarea',id:x.id},b:{act:'tcheck',id:x.id,label:'Entregada'}});
     else if(b==='tomorrow'&&m>=1080)add(58,{c:matColor(x.materiaId),t:x.titulo||'Sin título',s:'Mañana, '+(x.hora||'23:59')+' · '+matShort(x.materiaId),go:{act:'tarea',id:x.id},b:{act:'tcheck',id:x.id,label:'Entregada'}});});
-  // dolor anotado los últimos días y hoy toca entrenar
-  if(S.diasReady&&S.cfgReady&&rutinasDe(wd).length&&!isHidden('dolor')){const pn=painNote(t),ej=habits().find(x=>x.id==='ejercicio');
-    if(pn&&!(ej&&hState(t,ej)==='hecho'))add(m<720?82:48,{c:'var(--late)',t:'Ojo con el dolor de '+painWhen(pn),s:painAdvice(t,pn),go:{act:'go',tab:'ejercicio'},x:'dolor'});}
   // sueño de anoche (si tu reloj no lo mandó todavía)
   if(S.diasReady&&S.cfg.plan&&started(t)&&!locked(t)&&!day.wake){const wk=toMin(ag.despertar);if(m>=(wk==null?360:wk)-60&&m<840)add(92,{c:'var(--spi)',t:'¿Cómo dormiste?',s:S.syncSueno?'Tu iPhone no ha mandado la noche de hoy. Revisa las horas y guarda.':'Ajusta las horas si hace falta y guarda.',form:sleepForm(t)});}
   // nunca falles dos veces
@@ -2803,31 +2798,6 @@ function rutBox(r,scope,label){
   const key=scope+':'+r.id,open=openRut.has(key);
   return `<div class="rut${open?' open':''}" id="rut-${esc(scope)}-${esc(r.id)}"><button type="button" class="rut-h" data-act="rut" data-key="${esc(key)}" aria-expanded="${open}"><span><span class="rn">${esc(r.nombre)}</span><span class="rm">${esc([label,r.sub,r.dur].filter(Boolean).join(', '))}</span></span><span class="chev" aria-hidden="true">›</span></button>${open?`<div class="rut-b">${rutDetail(r,scope)}</div>`:''}</div>`;
 }
-/* ================= dolor anotado: el ejercicio de los próximos días se adapta ================= */
-const PAIN_RE=/\b(me duelen?|dolor|adolorid|lesi[oó]n|lastim|torc[ií]|esguince|calambre|contractura|tir[oó]n|inflamad)/i;
-const LEGS_RE=/pierna|rodilla|cadera|banda|iliotibial|tobillo|\bpies?\b|gemelo|pantorrilla|cu[aá]driceps|isquio|gl[uú]te|ingle|espinilla/i;
-const UPPER_RE=/hombro|brazo|codo|mu[ñn]eca|espalda|cuello|pecho|b[ií]ceps|tr[ií]ceps|dorsal/i;
-const PAIN_SAFE='Si el dolor es fuerte, punzante o no mejora en unos días, que te revise un médico o fisio.';
-function painNote(t){
-  for(let k=0;k<=2;k++){const d=addDays(t,-k),x=S.dias[d];if(!x)continue;
-    const txt=[x.note||''].concat(Object.values(x.hnote||{}).map(o=>(o&&o.nota)||'')).join('. ');
-    const cl=txt.split(/[.!?\n;]+|,\s*/).map(s=>s.trim()).filter(s=>PAIN_RE.test(s));if(!cl.length)continue;
-    const all=cl.join(' '),best=cl.find(s=>LEGS_RE.test(s)||UPPER_RE.test(s))||cl[0];
-    return {d,k,txt:best.length>110?best.slice(0,107).trim()+'…':best,legs:LEGS_RE.test(all),upper:UPPER_RE.test(all)};}
-  return null;
-}
-function painAdvice(t,p){
-  const r=rutinasDe(wdOf(t)).map(o=>rutById(o.rutina)).filter(Boolean)[0];
-  if(!r)return 'Hoy no tienes rutina: descansa y muévete suave.';
-  const id=r.nombre+' '+(r.sub||''),ex=(r.bloques||[]).flatMap(b=>(b.ejercicios||[]).map(e=>e.t||'')).join(' ');
-  const leg=/inferior|pierna|cadena posterior|cu[aá]driceps|gl[uú]te|sentadilla/i.test(id),up=/superior|empuje|jal[oó]n|tracci|hombro|pecho|espalda/i.test(id),jumps=/salt|cuerda|burpee|correr|carrera|trote/i.test(ex);
-  if(p.legs&&leg)return `Hoy toca ${r.nombre}: no la fuerces. Mejor movilidad suave o pásala a otro día.`;
-  if(p.upper&&up)return `Hoy toca ${r.nombre}: bájale al peso o cámbiala por movilidad.`;
-  if(p.legs)return `Hoy toca ${r.nombre}: puedes entrenar${jumps?', pero sin saltos ni cuerda':' cuidando las piernas'}.`;
-  if(p.upper)return `Hoy toca ${r.nombre}: puedes entrenar, cuidando la zona que te duele.`;
-  return `Hoy toca ${r.nombre}: escucha a tu cuerpo y bájale si molesta.`;
-}
-const painWhen=p=>p.k===0?'hoy':(p.k===1?'ayer':'el '+DAYS[wdOf(p.d)-1].toLowerCase());
 function hoyEjercicio(t){
   const e=eje();if(!e||!(e.rutinas||[]).length)return '';
   const wd=wdOf(t),list=rutinasDe(wd).map(x=>({x,r:rutById(x.rutina)})).filter(o=>o.r);
@@ -2835,8 +2805,6 @@ function hoyEjercicio(t){
   if(list.length)body=list.map(o=>{const hr=ejHora(t,o.x);return rutBox(o.r,'hoy',hr?'A las '+fmtT(hr):'');}).join('');
   else{const op=opcionalDe(wd);
     body=op.rutinas.length?`<p class="empty" style="margin-bottom:10px">Hoy descansas. Opcional, si te sobra tiempo${op.nota?': '+esc(op.nota.charAt(0).toLowerCase()+op.nota.slice(1)):'.'}</p>${op.rutinas.map(r=>rutBox(r,'hoy','')).join('')}`:'<p class="empty">Hoy descansas.</p>';}
-  const pn=painNote(t);
-  if(pn)body=`<div class="pain"><p><b>Anotaste dolor ${esc(painWhen(pn))}:</b> «${esc(pn.txt)}». ${esc(painAdvice(t,pn))}</p><p class="safe">${esc(PAIN_SAFE)}</p></div>`+body;
   return `<section class="card" style="--c:var(--hab)"><div class="ch"><h2>Ejercicio</h2><button class="link" type="button" data-act="go" data-tab="ejercicio">Semana</button></div>${body}</section>`;
 }
 function vEje(){

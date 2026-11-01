@@ -344,28 +344,15 @@ await run('Teléfono chico en modo oscuro (320 px)', { time: '2026-10-31T13:15:0
   ok(!bad.length, 'ninguna pantalla se sale de lado', bad);
 });
 
-// --- el dolor que anotas cambia el consejo de ejercicio; de noche, «Mañana» ---
-const conDolor = (today, ayer, nota) => { const sd = makeSeed(today); sd['dias/' + ayer] = Object.assign({}, sd['dias/' + ayer], { note: nota }); return sd; };
-await run('Noche con dolor (sáb 31 oct 21:30)', { time: '2026-10-31T21:30:00-06:00', seed: conDolor('2026-10-31', '2026-10-31', 'Corrí 15 km con mi papá, me duelen las rodillas y la cadera. Fuera de eso, buen día.') }, async ({ page }) => {
+// --- de noche: «Buenas noches» en días flexibles y la tarjeta «Mañana» ---
+await run('Noche del sábado (sáb 31 oct 21:30)', { time: '2026-10-31T21:30:00-06:00' }, async ({ page }) => {
   const now = await page.$eval('.now', (e) => e.innerText);
   ok(/Buenas noches/.test(now) && /Mañana despiertas a las 7:00/.test(now), 'de noche, el día flexible habla de dormir', now);
   const mc = await page.$eval('.manana', (e) => e.innerText).catch(() => '');
-  ok(/Mañana, domingo 1/.test(mc) && /Día flexible/.test(mc) && /Ejercicio\s+Superior B \(ojo con el dolor\)/.test(mc), 'tarjeta «Mañana» con agenda, hábitos y ejercicio', mc);
+  ok(/Mañana, domingo 1/.test(mc) && /Día flexible/.test(mc) && /Ejercicio\s+Superior B/.test(mc), 'tarjeta «Mañana» con agenda, hábitos y ejercicio', mc);
 });
-await run('Domingo después del dolor (dom 1 nov 8:00)', { time: '2026-11-01T08:00:00-06:00', seed: conDolor('2026-11-01', '2026-10-31', 'Corrí 15 km con mi papá, me duelen las rodillas y la cadera. Fuera de eso, buen día.') }, async ({ page }) => {
+await run('Mañana del domingo (dom 1 nov 8:00)', { time: '2026-11-01T08:00:00-06:00' }, async ({ page }) => {
   ok(!(await page.$('.manana')), 'en la mañana no aparece «Mañana»');
-  await page.click('[data-act="focusAll"]').catch(() => {}); await wait(page);
-  const f = await page.$eval('.focus', (e) => e.innerText);
-  ok(/Ojo con el dolor de ayer/.test(f) && /Superior B: puedes entrenar/.test(f), 'Para ahora avisa del dolor y adapta la rutina', f.match(/Ojo con[^\n]*\n[^\n]*/)?.[0]);
-  const pn = await page.$eval('.pain', (e) => e.innerText).catch(() => '');
-  ok(/Anotaste dolor ayer/.test(pn) && /me duelen las rodillas y la cadera/.test(pn) && /médico o fisio/.test(pn), 'la tarjeta de ejercicio cita lo que anotaste', pn);
-});
-await run('Día de pierna con dolor (mar 3 nov 7:00)', { time: '2026-11-03T07:00:00-06:00', seed: conDolor('2026-11-03', '2026-11-02', 'Me duele la rodilla derecha desde el fútbol') }, async ({ page }) => {
-  const pn = await page.$eval('.pain', (e) => e.innerText).catch(() => '');
-  ok(/Hoy toca Inferior A: no la fuerces/.test(pn), 'en día de pierna sugiere no forzar', pn);
-});
-await run('Sin dolor anotado (dom 1 nov 8:00)', { time: '2026-11-01T08:00:00-06:00' }, async ({ page }) => {
-  ok(!(await page.$('.pain')) && !/Ojo con el dolor/.test(await page.$eval('#view', (e) => e.innerText)), 'sin notas de dolor no dice nada');
 });
 
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
