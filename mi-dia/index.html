@@ -732,6 +732,20 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .now .ndone{font-size:15px;font-weight:600;color:var(--ok)}
 .nowb{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:2px}
 /* menú Más */
+.srch{position:relative;margin:0 0 12px}
+.srch svg{position:absolute;left:10px;top:50%;width:17px;height:17px;transform:translateY(-50%);fill:none;stroke:var(--muted);stroke-width:2.2;stroke-linecap:round;pointer-events:none}
+.srch input{width:100%;border:0;border-radius:10px;background:var(--seg);padding:9px 12px 9px 34px;font-size:17px;color:var(--ink);outline:none;-webkit-appearance:none;appearance:none}
+.srch input:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)}
+.sgrp{margin:0 0 14px}
+.sgrp h4{margin:0 4px 6px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}
+.sgrp h4 span{font-weight:500;opacity:.8}
+.sres{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 16px;color:var(--ink);min-height:48px}
+.sres+.sres{background-image:linear-gradient(var(--sep),var(--sep));background-repeat:no-repeat;background-size:calc(100% - 16px) .5px;background-position:right top}
+.sres b{display:block;font-weight:600;font-size:16px;line-height:1.3}
+.sres small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:2px}
+.smore,.sempty{margin:6px 4px 0;font-size:13px;color:var(--muted)}
+.hl{animation:hl 1.8s ease-out}
+@keyframes hl{0%,30%{background-color:color-mix(in srgb,var(--accent) 22%,transparent)}100%{background-color:transparent}}
 .mlist{display:flex;flex-direction:column;background:var(--surface);border-radius:12px;overflow:hidden;box-shadow:var(--card-shadow);margin-bottom:6px}
 .mgo{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;border:0;background:none;text-align:left;padding:12px 16px;min-height:62px;width:100%;color:var(--ink)}
 .mgo+.mgo{background-image:linear-gradient(var(--sep),var(--sep));background-repeat:no-repeat;background-size:calc(100% - 64px) .5px;background-position:right top}
@@ -940,7 +954,9 @@ li.task.swiping::after,li.task.gone::after{content:"Entregada";position:absolute
 
 <div class="sheet" id="shMas" role="dialog" aria-modal="true" aria-labelledby="masT">
   <div class="shh"><h3 id="masT">Más</h3><button class="x" type="button" data-close aria-label="Cerrar">×</button></div>
+  <div class="srch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><input id="masQ" type="search" placeholder="Buscar en toda la app" autocomplete="off" autocorrect="off" enterkeyhint="search" aria-label="Buscar en toda la app"></div>
   <div class="mlist" id="masBody"></div>
+  <div id="masRes" aria-live="polite" hidden></div>
 </div>
 
 <div class="ask" id="ask" role="alertdialog" aria-modal="true" aria-labelledby="askT" hidden>
@@ -3384,8 +3400,51 @@ function masSummary(k){
 function openMas(){
   $('#masBody').innerHTML=[['comida','Comida','var(--com)'],['ejercicio','Ejercicio','var(--hab)'],['armario','Armario','#A0785A'],['extras','Extras y lectura','var(--spi)']].map(([k,l,c])=>{let sm='';try{sm=masSummary(k);}catch(e){}
     return `<button type="button" class="mgo" data-go="${k}"${S.tab===k?' aria-current="page"':''}><span class="mic" style="--c:${c}">${ICON[k]}</span><span style="min-width:0"><b>${l}</b><small>${esc(sm)}</small></span><span class="chev" aria-hidden="true">›</span></button>`;}).join('');
+  $('#masQ').value='';showSearch('');
   openSheet('#shMas');
 }
+/* ================= buscar en toda la app ================= */
+const fold=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const vals=o=>typeof o==='string'?o:(Array.isArray(o)?o.map(vals).join(' '):(o&&typeof o==='object'?Object.keys(o).filter(k=>k!=='id').map(k=>vals(o[k])).join(' '):''));
+const XEST={terminado:'Terminado',curso:'En curso',pendiente:'Pendiente'};
+function searchAll(q){
+  const toks=fold(q).split(/\s+/).filter(Boolean);if(!toks.length)return [];
+  const hit=s=>{const h=fold(s);return toks.every(t=>h.includes(t));};
+  const snip=txt=>{const f=fold(txt),i=f.indexOf(toks[0]),a=Math.max(0,i-30);return i<0?txt.slice(0,90):(a?'…':'')+txt.slice(a,a+90).trim()+(a+90<txt.length?'…':'');};
+  const G=[],add=(n,r)=>{if(r.length)G.push([n,r]);};
+  if(S.tareasReady)add('Entregas',S.tareas.filter(x=>hit([x.titulo,matShort(x.materiaId),x.etiqueta,x.notas].join(' '))).sort((a,b)=>dueOf(b)-dueOf(a))
+    .map(x=>({t:x.titulo||'Sin título',s:matShort(x.materiaId)+' · '+(x.estado==='entregada'?'Entregada':dueText(x)),a:{act:'qTarea',id:x.id}})));
+  const mv=[];Object.keys(S.meses).forEach(ym=>(Array.isArray(S.meses[ym])?S.meses[ym]:[]).forEach(x=>{const c=catById(x.cat);
+    if(hit([x.note,c?c.name:'',x.t,String(Math.round(x.amt))].join(' ')))mv.push({t:x.note||(c?c.name:'Movimiento'),s:nice(x.d)+' · '+(x.t==='ingreso'?'+':'')+money(x.amt)+(c?' · '+c.name:''),d:x.d,a:{act:'qMov',ym,id:x.id}});}));
+  add('Dinero',mv.sort((a,b)=>a.d<b.d?1:-1));
+  add('Diario',Object.keys(S.dias).filter(d=>{const n=(S.dias[d]||{}).note;return n&&hit(n);}).sort().reverse().map(d=>({t:cap(longDate(d)),s:snip(S.dias[d].note),a:{act:'jgo',date:d}})));
+  if(S.extrasReady)add('Películas, series y libros',S.extras.filter(x=>hit([x.titulo,x.detalle,x.nota,(XT[x.tipo]||{}).l].join(' ')))
+    .map(x=>({t:x.titulo||'Sin título',s:[(XT[x.tipo]||{}).l,x.detalle,XEST[x.estado]].filter(Boolean).join(' · '),a:{act:'qExt',id:x.id}})));
+  add('Recetas',recetas().filter(r=>hit(vals(r))).map(r=>({t:r.nombre,s:[r.cuando,r.tiempo].filter(Boolean).join(' · ')||'Receta',a:{act:'qRec',id:r.id}})));
+  add('Ejercicio',((eje()||{}).rutinas||[]).filter(r=>hit(vals(r))).map(r=>({t:r.nombre,s:r.sub||'Rutina',a:{act:'qRut',id:r.id}})));
+  add('Hábitos',habits().filter(h=>!h.archived&&hit([h.name,h.meta,h.min].join(' '))).map(h=>({t:h.name,s:h.meta||'Hábito',a:{act:'qHab'}})));
+  return G;
+}
+function showSearch(q){
+  const res=$('#masRes'),body=$('#masBody'),on=fold(q).trim().length>=2;
+  body.hidden=on;res.hidden=!on;if(!on){res.innerHTML='';return;}
+  const G=searchAll(q),MAX=8;
+  res.innerHTML=G.length?G.map(([n,r])=>`<section class="sgrp"><h4>${esc(n)} <span>${r.length}</span></h4><div class="mlist">${r.slice(0,MAX).map(x=>`<button type="button" class="sres" ${dataAttrs(x.a)}><b>${esc(x.t)}</b><small>${esc(x.s)}</small></button>`).join('')}</div>${r.length>MAX?`<p class="smore">Y ${r.length-MAX} más. Escribe algo más específico.</p>`:''}</section>`).join('')
+    :`<p class="sempty">Nada con «${esc(q.trim())}». Busca por título, materia, comercio, monto, palabras de tu diario, ingredientes o ejercicios.</p>`;
+}
+let sqT=0;
+$('#masQ').addEventListener('input',e=>{clearTimeout(sqT);const v=e.target.value;sqT=setTimeout(()=>showSearch(v),120);});
+$('#masQ').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const b=$('#masRes .sres');if(b)b.click();}});
+$('#masRes').addEventListener('click',e=>{const b=e.target.closest('.sres');if(!b)return;const d=b.dataset;closeSheets();
+  const flash=sel=>setTimeout(()=>{const el=document.querySelector(sel);if(!el)return;const row=el.closest('.mv,li,.rut,.wd')||el;row.scrollIntoView({block:'center',behavior:'smooth'});row.classList.add('hl');setTimeout(()=>row.classList.remove('hl'),1800);},60);
+  if(d.act==='qTarea'){goTab('entregas');openTarea(d.id);}
+  else if(d.act==='qMov'){S.din.ym=d.ym;S.din.sub='movs';goTab('dinero');flash(`[data-act="txEdit"][data-id="${CSS.escape(d.id)}"],[data-act="delTx"][data-id="${CSS.escape(d.id)}"]`);}
+  else if(d.act==='jgo')ACT.jgo(b);
+  else if(d.act==='qExt'){S.ext.sub='reg';goTab('extras');openExt(d.id);}
+  else if(d.act==='qRec'){goTab('comida');ACT.recGo(b);}
+  else if(d.act==='qRut'){goTab('ejercicio');ACT.rutGo(b);}
+  else if(d.act==='qHab'){S.hab.view='dia';goTab('habitos');}
+});
 $('#masBody').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;closeSheets();goTab(b.dataset.go);});
 window.__midia={agendaFor:d=>agendaFor(d),money:n=>money(n),quien:f=>quien(f),nombre:()=>nombre(),cats:()=>pcfg(ymOf(new Date())).cats.map(c=>({id:c.id,name:c.name,g:c.g,amt:Number(c.amt)||0})),
   catLeft:id=>{const ym=ymOf(new Date()),tx=S.meses[ym];if(!Array.isArray(tx))return null;const c=pcfg(ym).cats.find(x=>x.id===id);if(!c)return null;return (Number(c.amt)||0)-(sums(tx).spent[id]||0);},

@@ -369,6 +369,29 @@ await run('Arranque rápido', { settle: 2000, beforeGoto: (pg) => pg.addInitScri
   ok(await page.evaluate(() => window.__renders) === 1 && /Ensayo nuevo/.test(await page.$eval('#view', (e) => e.innerText)), 'y si cambian, se dibuja una vez');
 });
 
+// --- buscar en toda la app desde «Más» ---
+await run('Buscar en todo (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00' }, async ({ page }) => {
+  const buscar = async (q) => { await page.fill('#masQ', q); await wait(page, 260); return page.$eval('#masRes', (e) => e.innerText).catch(() => ''); };
+  await page.click('#tabbar button[data-tab="mas"]'); await wait(page, 300);
+  ok(await visible(page, '#masQ') && await visible(page, '#masBody'), 'el buscador está arriba del menú');
+  let r = await buscar('monster');
+  ok(/DINERO\s*3/i.test(r) && /Monster/.test(r) && !(await visible(page, '#masBody')), 'encuentra gastos por comercio', r.slice(0, 160));
+  r = await buscar('exposicion');
+  ok(/DIARIO/i.test(r) && /exposición/.test(r), 'sin acentos también encuentra el diario', r.slice(0, 160));
+  r = await buscar('risk register');
+  ok(/ENTREGAS/i.test(r) && /Activity 7: Risk register/.test(r), 'encuentra entregas con varias palabras', r.slice(0, 160));
+  await page.click('#masRes .sres'); await wait(page, 400);
+  ok(await visible(page, '#shTarea.open') && await page.$eval('#tabbar [data-tab="entregas"]', (b) => b.getAttribute('aria-current')) === 'page', 'tocar el resultado abre la entrega');
+  await page.click('#shTarea.open [data-close]'); await wait(page, 300);
+  await page.click('#tabbar button[data-tab="mas"]'); await wait(page, 300);
+  ok(await page.$eval('#masQ', (i) => i.value) === '' && await visible(page, '#masBody'), 'al volver a abrir, el buscador está limpio');
+  await buscar('sushi'); await page.click('#masRes .sres'); await wait(page, 500);
+  ok(/Movimientos/.test(await page.$eval('.seg [aria-pressed="true"]', (b) => b.textContent)) && !!(await page.$('.mv.hl')), 'un gasto te lleva a Movimientos y lo resalta');
+  await page.click('#tabbar button[data-tab="mas"]'); await wait(page, 300);
+  r = await buscar('zzzz qqq');
+  ok(/Nada con «zzzz qqq»/.test(r), 'si no hay nada, lo dice');
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });
