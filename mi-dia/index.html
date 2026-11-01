@@ -744,6 +744,15 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .ritem .pill{background:var(--surface)}
 .rwait{display:flex;align-items:center;gap:10px;margin:4px 0;color:var(--muted);font-size:15px}
 .rfoot{margin:10px 0 0;font-size:12px;color:var(--muted)}
+.pausa{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,transparent);padding:10px 12px;margin:0 0 12px;font-size:15px;line-height:1.4}
+.pausa p{margin:0}.pausa .link{flex:none}
+.checks.paused{opacity:.75}
+.link.vaca{display:block;margin:12px 2px 0;font-size:15px}
+.pzcur{margin:0 0 14px;border-radius:12px;background:var(--fill);padding:2px 12px}
+.pzrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0}
+.pzrow+.pzrow{border-top:.5px solid var(--sep)}
+.pzrow small{display:block;color:var(--muted);font-size:13px}
+.chips.wrap{flex-wrap:wrap;overflow:visible}
 .srch{position:relative;margin:0 0 12px}
 .srch svg{position:absolute;left:10px;top:50%;width:17px;height:17px;transform:translateY(-50%);fill:none;stroke:var(--muted);stroke-width:2.2;stroke-linecap:round;pointer-events:none}
 .srch input{width:100%;border:0;border-radius:10px;background:var(--seg);padding:9px 12px 9px 34px;font-size:17px;color:var(--ink);outline:none;-webkit-appearance:none;appearance:none}
@@ -967,6 +976,11 @@ li.task.swiping::after,li.task.gone::after{content:"Entregada";position:absolute
   <div class="mrow" id="gAddRow" style="margin:4px 0 14px"><select id="gTipo" class="in" aria-label="Tipo de meta"><option value="sueno">Dormir bien</option><option value="habitos">% de hábitos</option><option value="habito">Un hábito X veces</option><option value="tope">Gasto máximo en una categoría</option><option value="entrega">Una entrega</option><option value="libre">Meta libre</option></select><button class="secondary" type="button" id="gAdd">Agregar</button></div>
   <p class="err" id="gErr" role="alert"></p>
   <div class="actions"><button class="primary" id="gGuardar" type="button">Guardar</button></div>
+</div>
+
+<div class="sheet" id="shPausa" role="dialog" aria-modal="true" aria-labelledby="pzT">
+  <div class="shh"><h3 id="pzT">Modo vacaciones</h3><button class="x" type="button" data-close aria-label="Cerrar">×</button></div>
+  <div id="pzBody"></div>
 </div>
 
 <div class="sheet" id="shMas" role="dialog" aria-modal="true" aria-labelledby="masT">
@@ -1260,7 +1274,8 @@ const fmtHc=h=>{const m=Math.round(h*60);return Math.floor(m/60)+'h '+pad(m%60)+
 function dayTiles(t){
   const out=[];
   if(S.cfg.plan&&started(t)&&S.diasReady){
-    const c=dayCount(t);if(c.counted){const r=c.counted-c.done;out.push({k:'Hábitos',v:fmtN(c.done)+' de '+c.counted,p:c.done/c.counted,f:'var(--accent)',cap:r>0?fmtN(r)+' por hacer':'Todo listo',go:{act:'go',tab:'habitos'}});}
+    const c=dayCount(t),pd=pauseDay(t);if(!c.counted&&pd)out.push({k:'Hábitos',v:'En pausa',p:0,f:'var(--accent)',cap:'Hasta el '+nice(pd.fin),go:{act:'go',tab:'habitos'}});
+    if(c.counted){const r=c.counted-c.done;out.push({k:'Hábitos',v:fmtN(c.done)+' de '+c.counted,p:c.done/c.counted,f:'var(--accent)',cap:r>0?fmtN(r)+' por hacer':'Todo listo',go:{act:'go',tab:'habitos'}});}
     const sh=sleepHours(t),goal=minSleep();
     if(sh==null)out.push({k:'Sueño',v:'—',p:0,f:'var(--accent)',cap:'Toca para anotar',go:{act:'goSleep'}});
     else{const d=sh-goal;out.push({k:'Sueño',v:fmtHc(sh),p:Math.min(1,sh/goal),f:d<-1?'var(--late)':'var(--accent)',cap:d>=0?'Meta de '+fmtN(goal)+' h':fmtMin(-d*60)+' debajo',go:{act:'go',tab:'habitos'}});}
@@ -1629,9 +1644,9 @@ function hoyHabitos(t){
   else if(!S.cfg.plan)body='<p class="empty">Aún no hay un plan de hábitos.</p>';
   else if(!started(t))body=`<p class="empty">Tu seguimiento empieza el ${esc(longDate(startDate()))}.</p>`;
   else{
-    const hs=bySlot(habits().filter(h=>plannedOn(h,t)),t);
-    if(!hs.length)body='<p class="empty">No hay hábitos planeados para hoy.</p>';
-    else body='<div class="checks">'+hs.map(h=>habBtn(h,t,false)).join('')+'</div>';
+    const hs=bySlot(habits().filter(h=>plannedOn(h,t)),t),pz=pausedList(t);
+    if(!hs.length&&!pz.length)body='<p class="empty">No hay hábitos planeados para hoy.</p>';
+    else body=pauseBanner(t)+(hs.length?'<div class="checks">'+hs.map(h=>habBtn(h,t,false)).join('')+'</div>':'')+(pz.length?'<h3 class="sub">En pausa</h3><div class="checks paused">'+pz.map(h=>habBtn(h,t,false)).join('')+'</div>':'');
     body+='<h3 class="sub">¿Comiste bien?</h3>'+mealChecks(t);
   }
   let aside='';
@@ -1728,7 +1743,13 @@ function histAt(h,d){
 }
 function effDays(h,d){const e=histAt(h,d);return e?e.days:(Array.isArray(h.days)?h.days:[]);}
 function effOpt(h,d){const e=histAt(h,d);return e?(Array.isArray(e.opt)?e.opt:[]):(Array.isArray(h.optDays)?h.optDays:[]);}
-const activeOn=(h,d)=>started(d)&&!(h.from&&d<h.from)&&!(h.archived&&d>=h.archived);
+const activeRaw=(h,d)=>started(d)&&!(h.from&&d<h.from)&&!(h.archived&&d>=h.archived);
+/* modo vacaciones: pausas con fecha de inicio y fin, para todos los hábitos o solo algunos */
+const pausas=()=>{const a=(S.cfg.plan||{}).pausas;return Array.isArray(a)?a.filter(p=>p&&p.ini&&p.fin):[];};
+const pauseDay=d=>pausas().find(p=>d>=p.ini&&d<=p.fin)||null;
+const pausedOn=(h,d)=>pausas().some(p=>d>=p.ini&&d<=p.fin&&(!(p.habits||[]).length||p.habits.includes(h.id)));
+const activeOn=(h,d)=>activeRaw(h,d)&&!pausedOn(h,d);
+const pausedList=d=>habits().filter(h=>pausedOn(h,d)&&activeRaw(h,d)&&(effDays(h,d).includes(wdOf(d))||extraOn(h,d)||effOpt(h,d).includes(wdOf(d))));
 const scheduledOn=(h,d)=>activeOn(h,d)&&effDays(h,d).indexOf(wdOf(d))!==-1;
 const extraOn=(h,d)=>((S.dias[d]||{}).extra||[]).indexOf(h.id)!==-1;
 const optOn=(h,d)=>activeOn(h,d)&&!scheduledOn(h,d)&&!extraOn(h,d)&&effOpt(h,d).indexOf(wdOf(d))!==-1;
@@ -1805,7 +1826,36 @@ const horaOf=(d,id)=>(((S.dias[d]||{}).hora)||{})[id]||null;
 const nowHHMM=()=>{const x=new Date();return pad(x.getHours())+':'+pad(x.getMinutes());};
 function stateFromCant(h,v){if(v==null||!isMeas(h))return null;const m=Number(h.metaN),mn=Number(h.minN)||0;if(v>=m)return 'hecho';if(mn?v>=mn:v>0)return 'parcial';return 'no';}
 function prevPlanned(h,d){for(let k=1;k<=7;k++){const p=addDays(d,-k);if(!started(p))return null;if(plannedOn(h,p))return p;}return null;}
-function twice(h,d){if(d!==todayISO()||hState(d,h)!=='no')return false;const p=prevPlanned(h,d);return !!p&&hState(p,h)==='no';}
+function pauseBanner(d){
+  const p=pauseDay(d);if(!p)return '';const all=!(p.habits||[]).length,names=all?'':listJoin(habits().filter(h=>p.habits.includes(h.id)).map(h=>h.name));
+  return `<div class="pausa"><p><b>${p.nota?esc(p.nota)+' · ':''}Modo vacaciones</b> hasta el ${esc(longDate(p.fin))}. ${all?'Tus hábitos no cuentan':'No cuentan '+esc(names)} estos días: tus rachas y porcentajes quedan intactos.</p>${S.db?`<button class="link" type="button" data-act="pausaEnd" data-id="${esc(p.id)}">Terminar</button>`:''}</div>`;
+}
+let pzSel=null;
+function openPausa(){
+  if(!needDb())return;const t=todayISO();pzSel=new Set();
+  const cur=pausas().filter(p=>p.fin>=t).sort((a,b)=>a.ini<b.ini?-1:1),hs=habits().filter(h=>!h.archived);
+  $('#pzBody').innerHTML=`<p class="muted small" style="margin:0 0 12px">Pausa tus hábitos unos días, por un viaje o un descanso: no cuentan para tus porcentajes ni rompen tus rachas, y si haces alguno lo puedes marcar igual.</p>`
+    +(cur.length?'<div class="pzcur">'+cur.map(p=>`<div class="pzrow"><span><b>${esc(nice(p.ini))} – ${esc(nice(p.fin))}</b>${p.nota?' · '+esc(p.nota):''}<small>${(p.habits||[]).length?esc(listJoin(hs.filter(h=>p.habits.includes(h.id)).map(h=>h.name))):'Todos tus hábitos'}</small></span><button class="link" type="button" data-pz-del="${esc(p.id)}">Quitar</button></div>`).join('')+'</div>':'')
+    +`<div class="fields"><div class="field"><label for="pzIni">Desde</label><input id="pzIni" class="in" type="date" value="${t}"></div><div class="field"><label for="pzFin">Hasta</label><input id="pzFin" class="in" type="date" value="${addDays(t,2)}"></div></div>
+    <p class="lbl" style="margin:12px 0 6px">¿Qué hábitos?</p><div class="chips wrap" id="pzHabs"><button type="button" class="chip" data-pz-h="" aria-pressed="true">Todos</button>${hs.map(h=>`<button type="button" class="chip" data-pz-h="${esc(h.id)}" aria-pressed="false">${esc(h.name)}</button>`).join('')}</div>
+    <div class="field"><label for="pzNota">Motivo (opcional)</label><input id="pzNota" class="in" type="text" maxlength="40" placeholder="Ej. Viaje" autocomplete="off"></div>
+    <div class="btnrow"><button class="secondary" type="button" data-close>Cancelar</button><button class="primary" type="button" id="pzGo">Pausar</button></div>`;
+  openSheet('#shPausa');
+}
+function savePausas(list,msg,undo){S.cfg.plan=Object.assign({},S.cfg.plan,{pausas:list,updatedAt:new Date().toISOString()});persist('config/plan',()=>S.cfg.plan);render(true);toast(msg,undo);}
+$('#pzBody').addEventListener('click',e=>{
+  const hb=e.target.closest('[data-pz-h]');
+  if(hb){const id=hb.dataset.pzH;if(!id)pzSel.clear();else if(pzSel.has(id))pzSel.delete(id);else pzSel.add(id);
+    document.querySelectorAll('#pzHabs [data-pz-h]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pzH?pzSel.has(b.dataset.pzH):!pzSel.size)));return;}
+  const del=e.target.closest('[data-pz-del]');
+  if(del){const before=pausas();savePausas(before.filter(p=>p.id!==del.dataset.pzDel),'Pausa quitada',()=>savePausas(before,'Pausa restaurada'));openPausa();return;}
+  if(e.target.closest('#pzGo')){const ini=$('#pzIni').value,fin=$('#pzFin').value;
+    if(!ini||!fin||fin<ini){toast('Revisa las fechas: «Hasta» va después de «Desde».');return;}
+    if(dayDiff(parse(fin),parse(ini))>90){toast('Máximo 90 días por pausa.');return;}
+    const before=pausas(),p={id:newId(),ini,fin,habits:[...pzSel],nota:$('#pzNota').value.trim().slice(0,40)};
+    closeSheets();savePausas(before.concat([p]),'Listo: en pausa hasta el '+longDate(fin)+'.',()=>savePausas(before,'Pausa cancelada'));}
+});
+function twice(h,d){if(d!==todayISO()||pausedOn(h,d)||hState(d,h)!=='no')return false;const p=prevPlanned(h,d);return !!p&&hState(p,h)==='no';}
 const showsEntregas=h=>h.verEntregas!==undefined?!!h.verEntregas:h.id==='tareas';
 function nextEntregaFrom(d){return pendientes().find(x=>x.fecha>=d)||null;}
 function habBtn(h,d,showStreak){
@@ -1871,7 +1921,7 @@ function vHab(){
   // strip
   h+='<section class="strip" aria-label="Días de la semana">';
   for(let i=0;i<7;i++){const d=addDays(H.week,i),c=dayCount(d);
-    h+=`<button type="button" class="dbtn${d===t?' today':''}${c.counted&&c.done===c.counted?' full':''}" data-act="day" data-date="${d}"${d===H.day?' aria-current="true"':''} aria-label="${DAYS[i]} ${nice(d)}, ${fmtN(c.done)} de ${c.counted} hábitos"><span class="l">${SHORT[i]}</span><span class="n">${parse(d).getDate()}</span><span class="f">${c.hs.length?fmtN(c.done)+'/'+c.counted:'–'}</span>${c.counted?`<span class="dm" aria-hidden="true"><i style="width:${Math.round(c.done/c.counted*100)}%"></i></span>`:''}</button>`;}
+    h+=`<button type="button" class="dbtn${d===t?' today':''}${c.counted&&c.done===c.counted?' full':''}" data-act="day" data-date="${d}"${d===H.day?' aria-current="true"':''} aria-label="${DAYS[i]} ${nice(d)}, ${fmtN(c.done)} de ${c.counted} hábitos"><span class="l">${SHORT[i]}</span><span class="n">${parse(d).getDate()}</span><span class="f">${c.hs.length?fmtN(c.done)+'/'+c.counted:(pauseDay(d)?'pausa':'–')}</span>${c.counted?`<span class="dm" aria-hidden="true"><i style="width:${Math.round(c.done/c.counted*100)}%"></i></span>`:''}</button>`;}
   h+='</section>';
   const v=H.view||'dia';
   h+=`<div class="seg" role="tablist" style="margin:0 0 14px">${[['dia','Día'],['semana','Semana'],['grid','Cuadrícula']].map(([k,l])=>`<button type="button" data-act="hview" data-v="${k}" aria-pressed="${v===k}">${l}</button>`).join('')}</div>`;
@@ -1889,6 +1939,8 @@ function dayView(H,t){
   if(!started(d))checks='<p class="empty">Antes de la fecha de inicio no se registra nada.</p>';
   else if(!hs.length)checks='<p class="empty">No hay hábitos planeados para este día.</p>';
   else checks='<div class="checks">'+bySlot(hs,d).map(x=>habBtn(x,d,true)).join('')+'</div><p class="muted small" style="margin:8px 2px 0">Toca un hábito para marcarlo. Con ⋯ lo marcas como parcial o imprevisto, anotas el motivo o lo mueves a otro día.</p>';
+  if(started(d)){const pz=pausedList(d);checks=pauseBanner(d)+(hs.length||pz.length?checks.replace('<p class="empty">No hay hábitos planeados para este día.</p>',''):checks)+(pz.length?'<h3 class="sub">En pausa</h3><div class="checks paused">'+pz.map(x=>habBtn(x,d,false)).join('')+'</div>':'');
+    if(S.db&&!lk)checks+='<button class="link vaca" type="button" data-act="pausaOpen">Modo vacaciones: pausar hábitos</button>';}
   const tw=wakeGoal(d),tb=bedGoal(addDays(d,-1));
   const sh=sleepHours(d),min=minSleep(),day=getDay(d),e=day.energy;
   let eb='';for(let n=1;n<=5;n++)eb+=`<button type="button" class="eb" data-act="energy" data-n="${n}" aria-pressed="${e===n}" aria-label="Energía ${n} de 5"${lk?' disabled':''}>${n}</button>`;
@@ -3394,6 +3446,10 @@ const ACT={
   recapHide:b=>{lsSet('midia:recap',b.dataset.ym);render(true);toast('Listo. Lo tienes completo en Dinero.');},
   recapGo:b=>{S.din.ym=b.dataset.ym;goTab('dinero');},
   capAgain:()=>{S.cap.res=null;S.cap.sel=[];S.cap.text='';render(true);const ta=$('#capIn');if(ta)ta.focus();},
+  pausaOpen:()=>openPausa(),
+  pausaEnd:b=>{const t=todayISO(),before=pausas(),p=before.find(x=>x.id===b.dataset.id);if(!p)return;
+    const list=p.ini>=t?before.filter(x=>x.id!==p.id):before.map(x=>x.id===p.id?Object.assign({},x,{fin:addDays(t,-1)}):x);
+    savePausas(list,'Se acabaron las vacaciones: tus hábitos vuelven a contar desde hoy.',()=>savePausas(before,'Pausa restaurada'));},
   hide:b=>{hide(b.dataset.k);render(true);},
   focusAll:()=>{S.hoy.focusAll=!S.hoy.focusAll;render(true);},
   goDin:()=>{S.din.ym=ymOf(new Date());S.din.sub='res';subMonth(S.din.ym);goTab('dinero');},

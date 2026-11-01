@@ -445,6 +445,37 @@ await run('Preguntar sin Claude', { noSample: true }, async ({ page }) => {
   ok(/necesitas abrir la app desde Claude/.test(await page.$eval('.qa', (e) => e.innerText).catch(() => '')), 'explica que las preguntas necesitan a Claude');
 });
 
+// --- modo vacaciones: pausar hábitos sin castigar rachas ni porcentajes ---
+await run('Modo vacaciones (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00' }, async ({ page, today }) => {
+  await tab(page, 'habitos'); await wait(page, 300);
+  await page.click('[data-act="pausaOpen"]'); await wait(page, 300);
+  ok(await visible(page, '#shPausa.open'), 'se abre desde Hábitos');
+  await page.fill('#pzFin', '2026-10-29'); await page.click('#pzGo'); await wait(page, 200);
+  ok(/Revisa las fechas/.test(await page.$eval('#toast', (e) => e.textContent)), 'no acepta fechas al revés');
+  await page.fill('#pzFin', '2026-11-01'); await page.fill('#pzNota', 'Viaje'); await page.click('#pzGo'); await wait(page, 400);
+  const pl = await store(page, 'config/plan');
+  ok(pl.pausas && pl.pausas.length === 1 && pl.pausas[0].ini === today && pl.pausas[0].fin === '2026-11-01' && !pl.pausas[0].habits.length && pl.pausas[0].nota === 'Viaje', 'guarda la pausa en tu plan', pl.pausas);
+  let v = await page.$eval('#view', (e) => e.innerText);
+  ok(/Viaje · Modo vacaciones hasta el domingo 1 de noviembre/.test(v) && /En pausa/.test(v), 'avisa y separa los hábitos en pausa');
+  ok(await page.$eval('.dbtn[aria-current="true"] .f', (e) => e.textContent) === 'pausa', 'la tira de la semana marca el día en pausa');
+  const id = await page.$eval('.checks.paused .chk[data-act="hab"][aria-pressed="false"]', (b) => b.dataset.id);
+  await page.click(`.checks.paused .chk[data-id="${id}"]`); await wait(page, 300);
+  ok(((await store(page, 'dias/' + today)).habits || {})[id] === true, 'si haces uno en pausa, igual se anota');
+  await tab(page, 'hoy'); await wait(page, 200);
+  ok(/Hábitos En pausa/.test(await page.$eval('.kt', (e) => e.innerText.replace(/\n/g, ' '))), 'la tarjeta de Hoy dice «En pausa»');
+  await page.click('.pausa [data-act="pausaEnd"]'); await wait(page, 400);
+  ok(!((await store(page, 'config/plan')).pausas || []).length && !(await page.$('.pausa')), '«Terminar» el mismo día la quita por completo');
+  await tab(page, 'habitos'); await page.click('[data-act="pausaOpen"]'); await wait(page, 300);
+  await page.click('#pzHabs [data-pz-h="duolingo"]'); await page.click('#pzGo'); await wait(page, 400);
+  v = await page.$eval('#view', (e) => e.innerText);
+  ok(/No cuentan Duolingo estos días/.test(v) && (await page.$$eval('.checks.paused .chk', (x) => x.map((b) => b.dataset.id))).join() === 'duolingo', 'también se puede pausar solo un hábito');
+});
+await run('Pausa hacia atrás (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00', seed: (() => { const sd = makeSeed('2026-10-30'); sd['config/plan'].pausas = [{ id: 'p1', ini: '2026-10-28', fin: '2026-10-29', habits: [], nota: 'Enfermo' }]; return sd; })() }, async ({ page }) => {
+  await tab(page, 'habitos'); await wait(page, 300);
+  const f = await page.$$eval('.dbtn .f', (x) => x.map((e) => e.textContent));
+  ok(f[2] === 'pausa' && f[3] === 'pausa' && f[4] !== 'pausa', 'los días pasados en pausa ya no cuentan', f);
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });
