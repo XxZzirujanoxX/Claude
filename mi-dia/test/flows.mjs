@@ -476,6 +476,21 @@ await run('Pausa hacia atrás (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-
   ok(f[2] === 'pausa' && f[3] === 'pausa' && f[4] !== 'pausa', 'los días pasados en pausa ya no cuentan', f);
 });
 
+// --- Dinero: mapa de calor del gasto variable día por día ---
+await run('Día por día (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00' }, async ({ page }) => {
+  await tab(page, 'dinero'); await wait(page, 300);
+  ok(!!(await page.$('.mheat')), 'la tarjeta «Día por día» aparece en el resumen');
+  const cells = await page.$$eval('.mh-d', (x) => x.map((e) => e.className));
+  ok(cells.length === 31 && cells[30].includes('fut') && cells.some((c) => / l4/.test(c)) && cells.some((c) => / l0/.test(c)), 'un cuadro por día, con intensidad y días futuros apagados', cells.length);
+  ok(/Tu día más caro: \w+ \d+, \$[\d,]+/.test(await page.$eval('.mh-det', (e) => e.innerText)), 'resume tu día más caro');
+  await page.click('.mh-d[data-d="2026-10-27"]'); await wait(page);
+  const det = await page.$eval('.mheat', (e) => e.innerText);
+  ok(/Martes 27 de octubre · \$404 en 2 gastos \(más que tu día normal\)/.test(det) && /Sushi para cenar[\s\S]*Bar/.test(det), 'tocar un día muestra en qué se fue', det.match(/Martes[^\n]*/)?.[0]);
+  ok(await page.$eval('.mh-d[data-d="2026-10-27"]', (b) => b.getAttribute('aria-pressed')) === 'true', 'el día elegido queda marcado');
+  await page.click('.mh-d[data-d="2026-10-27"]'); await wait(page);
+  ok(/Toca un día/.test(await page.$eval('.mh-det', (e) => e.innerText)), 'tocarlo otra vez lo cierra');
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });

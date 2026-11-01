@@ -10,6 +10,7 @@
   --accent:#007AFF; --fill:#F2F2F7; --sep:rgba(60,60,67,.36); --seg:rgba(118,118,128,.12); --seg-on:#FFFFFF;
   --bar:rgba(249,249,249,.94); --tab-off:#999999; --grab:rgba(60,60,67,.3); --toast:#1C1C1E; --toast-fg:#FFFFFF;
   --night-bg:#1C1C1E; --night-fg:#FFFFFF; --card-shadow:0 4px 12px rgba(0,0,0,.05);
+  --mh1:#D1E7FF; --mh2:#94C7FF; --mh3:#479FFF; --mh4:#0058B8; --mh4f:#FFFFFF;
   --shadow:0 10px 30px rgba(0,0,0,.12);
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
@@ -23,6 +24,7 @@
     --accent:#0A84FF; --fill:#2C2C2E; --sep:rgba(84,84,88,.65); --seg:rgba(118,118,128,.24); --seg-on:#636366;
     --bar:rgba(22,22,23,.92); --tab-off:#8E8E93; --grab:rgba(235,235,245,.3); --toast:#3A3A3C; --toast-fg:#FFFFFF;
     --night-bg:#23214A; --night-fg:#ECEBFF; --card-shadow:none;
+    --mh1:#17395D; --mh2:#12559A; --mh3:#0A84FF; --mh4:#84C2FF; --mh4f:#000000;
     --shadow:0 10px 30px rgba(0,0,0,.6);
     color-scheme:dark;
   }
@@ -34,6 +36,7 @@
     --accent:#0A84FF; --fill:#2C2C2E; --sep:rgba(84,84,88,.65); --seg:rgba(118,118,128,.24); --seg-on:#636366;
     --bar:rgba(22,22,23,.92); --tab-off:#8E8E93; --grab:rgba(235,235,245,.3); --toast:#3A3A3C; --toast-fg:#FFFFFF;
     --night-bg:#23214A; --night-fg:#ECEBFF; --card-shadow:none;
+    --mh1:#17395D; --mh2:#12559A; --mh3:#0A84FF; --mh4:#84C2FF; --mh4f:#000000;
     --shadow:0 10px 30px rgba(0,0,0,.6);
     color-scheme:dark;
 }
@@ -483,7 +486,7 @@ button.x{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);b
 .mat-row button{background:none;border:0;color:var(--late);font-size:.85rem;padding:6px}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(136px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);
-  padding:10px 12px 10px 16px;border-radius:12px;font-size:.9rem;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;max-width:calc(100% - 32px);display:flex;gap:12px;align-items:center}
+  padding:10px 12px 10px 16px;border-radius:12px;font-size:.9rem;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;width:max-content;max-width:calc(100% - 32px);display:flex;gap:12px;align-items:center}
 .toast.show{opacity:1;pointer-events:auto}
 .toast button{border:0;background:none;color:var(--din);font-weight:700;padding:4px}
 @media (min-width:900px){.wrap{max-width:760px}}
@@ -752,7 +755,28 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .pzrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0}
 .pzrow+.pzrow{border-top:.5px solid var(--sep)}
 .pzrow small{display:block;color:var(--muted);font-size:13px}
-.chips.wrap{flex-wrap:wrap;overflow:visible}
+.chips.wrap{display:block;overflow:visible;padding-bottom:4px}
+.chips.wrap .chip{display:inline-flex;margin:0 6px 8px 0;vertical-align:top}
+#pzHabs .chip:not([aria-pressed="true"]){background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.mh-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.mh-w{text-align:center;font-size:12px;font-weight:600;color:var(--muted);padding-bottom:2px}
+.mh-d{aspect-ratio:1;border:0;border-radius:8px;display:grid;place-items:center;padding:0;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink);background:var(--fill)}
+.mh-d i{font-style:normal}
+.mh-d.l1{background:var(--mh1)}.mh-d.l2{background:var(--mh2)}
+.mh-d.l3{background:var(--mh3);color:#000}
+.mh-d.l4{background:var(--mh4);color:var(--mh4f);font-weight:700}
+.mh-d.fut{background:none;color:var(--muted);opacity:.5}
+.mh-d.tdy{box-shadow:inset 0 0 0 2px var(--ink)}
+.mh-d.sel{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+.mh-leg{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:10px 0 0;font-size:12px;color:var(--muted)}
+.mh-leg span:first-child{margin-right:2px}.mh-leg span:last-child{margin-left:4px}
+.mh-s{width:14px;height:14px;border-radius:4px;background:var(--fill)}
+.mh-s.l1{background:var(--mh1)}.mh-s.l2{background:var(--mh2)}.mh-s.l3{background:var(--mh3)}.mh-s.l4{background:var(--mh4)}
+.mh-det{margin:12px 0 0;font-size:15px;line-height:1.45}
+.mh-list{list-style:none;margin:8px 0 0;padding:0}
+.mh-list li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:15px}
+.mh-list li+li{border-top:.5px solid var(--sep)}
+.mh-list small{color:var(--muted);font-size:13px}
 .srch{position:relative;margin:0 0 12px}
 .srch svg{position:absolute;left:10px;top:50%;width:17px;height:17px;transform:translateY(-50%);fill:none;stroke:var(--muted);stroke-width:2.2;stroke-linecap:round;pointer-events:none}
 .srch input{width:100%;border:0;border-radius:10px;background:var(--seg);padding:9px 12px 9px 34px;font-size:17px;color:var(--ink);outline:none;-webkit-appearance:none;appearance:none}
@@ -2547,6 +2571,32 @@ function dinWeekCard(ym,tx){
     ${rows.length?'<ul class="cal">'+rows.map(li).join('')+'</ul>':'<p class="empty">No hay pagos ni ingresos esperados esta semana.</p>'}
     <p class="cal-foot num">Del dinero que entró este mes te quedan <b>${money(avail)}</b>${owed?`; después de lo que falta pagar o apartar: <b class="${avail-owed<0?'neg':''}">${money(avail-owed)}</b>`:''}.</p></section>`;
 }
+/* ================= día por día: mapa de calor del gasto variable ================= */
+function spendHeatCard(ym,tx){
+  const t=todayISO(),dim=daysIn(ym),by={};
+  (tx||[]).forEach(x=>{if(x.t!=='gasto'||!isVarCat(x.cat)||x.d.slice(0,7)!==ym)return;const o=by[x.d]||(by[x.d]={sum:0,list:[]});o.sum+=x.amt;o.list.push(x);});
+  const days=Object.keys(by);if(!days.length)return '';
+  const vb=pcfg(ym).cats.filter(x=>x.g==='var').reduce((s,x)=>s+(Number(x.amt)||0),0),per=vb>0?vb/dim:0;
+  const mx=Math.max(...days.map(d=>by[d].sum)),cut=per?[per*.5,per,per*2]:[mx*.25,mx*.5,mx*.75];
+  const lvl=v=>!v?0:(v<=cut[0]?1:(v<=cut[1]?2:(v<=cut[2]?3:4)));
+  const first=ym+'-01',off=wdOf(first)-1,sel=S.din.heatDay&&S.din.heatDay.slice(0,7)===ym?S.din.heatDay:null;
+  let g=SHORT.map(l=>`<span class="mh-w" aria-hidden="true">${l}</span>`).join('')+'<span class="mh-x"></span>'.repeat(off);
+  for(let i=1;i<=dim;i++){const d=ym+'-'+pad(i),o=by[d],fut=d>t,v=o?o.sum:0;
+    g+=fut?`<span class="mh-d fut" aria-hidden="true"><i>${i}</i></span>`
+      :`<button type="button" class="mh-d l${lvl(v)}${d===t?' tdy':''}${d===sel?' sel':''}" data-act="heatDay" data-d="${d}" aria-pressed="${d===sel}" aria-label="${esc(longDate(d))}: ${v?money(v):'sin gastos'}"><i>${i}</i></button>`;}
+  const past=days.filter(d=>d<=t),top=past.sort((a,b)=>by[b].sum-by[a].sum)[0],last=ym===t.slice(0,7)?Number(t.slice(8)):dim;
+  const free=Array.from({length:last},(_,k)=>ym+'-'+pad(k+1)).filter(d=>!by[d]).length;
+  let det;
+  if(sel){const o=by[sel],items=o?o.list.slice().sort((a,b)=>b.amt-a.amt):[];
+    det=`<p class="mh-det"><b>${esc(cap(longDate(sel)))}</b> · ${o?money(o.sum)+' en '+items.length+(items.length===1?' gasto':' gastos'):'sin gastos variables'}${per&&o?` (${o.sum>per?'más':'menos'} que tu día normal)`:''}</p>`
+      +(items.length?'<ul class="mh-list">'+items.slice(0,5).map(x=>{const c=catById(x.cat);return `<li><span>${esc(x.note||(c?c.name:'Gasto'))}${c?` <small>${esc(c.name)}</small>`:''}</span><b class="num">${money(x.amt)}</b></li>`;}).join('')+'</ul>':'');}
+  else det=`<p class="mh-det">${top?`Tu día más caro: <b>${esc(dShort(top))}</b>, ${money(by[top].sum)}. `:''}${free?`${free} ${free===1?'día':'días'} sin gastos variables. `:''}Toca un día para ver en qué se fue.</p>`;
+  const sw=k=>`<i class="mh-s l${k}" aria-hidden="true"></i>`;
+  return `<section class="card mheat" style="--c:var(--din)"><div class="ch"><h2>Día por día</h2><span class="aside">Gasto variable</span></div>
+    <div class="mh-grid" role="group" aria-label="Gasto variable por día de ${esc(MONTHS[Number(ym.slice(5))-1].toLowerCase())}">${g}</div>
+    <div class="mh-leg"><span>Sin gasto</span>${sw(0)}${sw(1)}${sw(2)}${sw(3)}${sw(4)}<span>${per?'Más del doble de '+money(per)+' al día':'Más'}</span></div>
+    ${det}</section>`;
+}
 function dinInsightsCard(ym,tx){
   const c=pcfg(),out=[],prev=S.meses[prevYm(ym)]||[],g=(tx||[]).filter(t=>t.t==='gasto'&&isVarCat(t.cat)),tot=g.reduce((a,t)=>a+t.amt,0);
   const subs=c.cats.filter(x=>x.g==='subs'),sm=sumAmt(subs);
@@ -2565,7 +2615,7 @@ function dinInsightsCard(ym,tx){
 }
 function resumenView(tx){
   if(!pcfg().cats.length)return '<p class="empty" style="text-align:center;padding:24px 8px">Arma tu presupuesto para ver el pronóstico. <button class="link" type="button" data-act="dsub" data-sub="budget">Armar presupuesto</button></p>';
-  const ym=S.din.ym;return '<div class="res">'+(ym===ymOf(new Date())?forecastCard(ym,tx)+dinWeekCard(ym,tx):'')+dinInsightsCard(ym,tx)+'</div>';
+  const ym=S.din.ym;return '<div class="res">'+(ym===ymOf(new Date())?forecastCard(ym,tx)+dinWeekCard(ym,tx):'')+spendHeatCard(ym,tx)+dinInsightsCard(ym,tx)+'</div>';
 }
 
 $('#vDesc').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#vMonto').focus();}});
@@ -3450,6 +3500,7 @@ const ACT={
   pausaEnd:b=>{const t=todayISO(),before=pausas(),p=before.find(x=>x.id===b.dataset.id);if(!p)return;
     const list=p.ini>=t?before.filter(x=>x.id!==p.id):before.map(x=>x.id===p.id?Object.assign({},x,{fin:addDays(t,-1)}):x);
     savePausas(list,'Se acabaron las vacaciones: tus hábitos vuelven a contar desde hoy.',()=>savePausas(before,'Pausa restaurada'));},
+  heatDay:b=>{const d=b.dataset.d;S.din.heatDay=S.din.heatDay===d?null:d;render(true);},
   hide:b=>{hide(b.dataset.k);render(true);},
   focusAll:()=>{S.hoy.focusAll=!S.hoy.focusAll;render(true);},
   goDin:()=>{S.din.ym=ymOf(new Date());S.din.sub='res';subMonth(S.din.ym);goTab('dinero');},
