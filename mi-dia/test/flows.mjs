@@ -1,5 +1,5 @@
 // Pruebas de punta a punta de Mi día con el runtime simulado.
-// Uso: node mi-dia/test/flows.mjs   (SHOTS=carpeta para guardar capturas)
+// Uso: node mi-dia/test/flows.mjs   (SHOTS=carpeta para guardar capturas, ONLY=texto para correr solo esas)
 import { open, tab, shot, store } from './harness.mjs';
 import { makeSeed } from './seed.mjs';
 
@@ -13,6 +13,7 @@ const sampleCalls = (page, needle) => page.evaluate((n) => window.__sampleLog.fi
 const visible = (page, sel) => page.$eval(sel, (el) => !el.hidden && getComputedStyle(el).display !== 'none').catch(() => false);
 const txOf = async (page, ym) => ((await store(page, 'meses/' + ym)) || { tx: [] }).tx;
 const run = async (name, opts, fn) => {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return; // ONLY=texto corre solo esas pruebas
   console.log('\n' + name);
   const env = await open(opts);
   try { await fn(env); } catch (e) { fails++; console.log('  ✗ excepción: ' + (e && e.stack || e)); }
@@ -489,6 +490,75 @@ await run('Día por día (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00
   ok(await page.$eval('.mh-d[data-d="2026-10-27"]', (b) => b.getAttribute('aria-pressed')) === 'true', 'el día elegido queda marcado');
   await page.click('.mh-d[data-d="2026-10-27"]'); await wait(page);
   ok(/Toca un día/.test(await page.$eval('.mh-det', (e) => e.innerText)), 'tocarlo otra vez lo cierra');
+});
+
+// --- presupuesto: el ahorro es lo que sobra y hay topes por semana ---
+const viajes = (today) => {
+  const sd = makeSeed(today), p = sd['config/presupuesto'];
+  p.cats = p.cats.map((c) => c.id === 'ahorro' ? Object.assign({}, c, { name: 'Ahorro para viajes', resto: true })
+    : c.id === 'ocio' ? Object.assign({}, c, { tope: 800 }) : c.id === 'comidas' ? Object.assign({}, c, { tope: 500 }) : c);
+  return sd;
+};
+const pesos = (n) => '$' + Number(n).toLocaleString('en-US');
+await run('Lo que sobra va a viajes (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00', seed: viajes('2026-10-30') }, async ({ page }) => {
+  await tab(page, 'dinero'); await wait(page, 300);
+  const v = await page.$eval('#view', (e) => e.innerText);
+  const quedan = (v.match(/Te quedan \$([\d,]+) de \$19,133/) || [])[1];
+  ok(!!quedan, 'lo que te queda no cuenta tu ahorro (19,133 = todo menos lo que sobra)', v.match(/Te (quedan|pasaste)[^\n]*/)?.[0]);
+  const hl = (v.match(/Ahorro para viajes: a este ritmo van \$([\d,]+)/) || [])[1];
+  const fl = (v.match(/A este ritmo van \$([\d,]+) a Ahorro para viajes este mes/) || [])[1];
+  ok(!!hl && hl === fl, 'el encabezado y el pronóstico dicen lo mismo', { hl, fl });
+  const end = hl ? Number(hl.replace(/,/g, '')) : -1;
+  ok(end > 0 && end !== 7067, 'lo que va a sobrar sale del pronóstico, no del plan', end);
+  ok(/Ahorro para viajes: tu plan \$7,067/.test(v), 'muestra el plan: ingresos menos todo lo demás');
+  await page.click('[data-act="dsub"][data-sub="cats"]'); await wait(page, 200);
+  const cv = await page.$eval('#view', (e) => e.innerText);
+  ok(new RegExp('Ahorro para viajes[\\s\\S]{0,20}\\$0 / \\$' + hl + '[\\s\\S]{0,10}Lo que sobra después de todo lo demás · tu plan: \\$7,067').test(cv), 'en Categorías se mide contra lo que va a sobrar', cv.slice(cv.indexOf('Ahorro y colchón'), cv.indexOf('Ahorro y colchón') + 200));
+  ok(/Ocio[\s\S]{0,40}Tope semanal: llevas \$[\d,]+ de \$750/.test(cv) && /Comidas en prácticas[\s\S]{0,60}Tope semanal: llevas \$210 de \$500/.test(cv), 'el tope que vale esta semana aparece en su categoría (la meta de la semana manda)');
+  const before = (await txOf(page, '2026-10')).length;
+  await page.click('[data-act="quick"][data-id="ahorro"]'); await wait(page, 300);
+  let tx = await txOf(page, '2026-10'); const t = tx[tx.length - 1];
+  ok(tx.length === before + 1 && t.cat === 'ahorro' && t.d === '2026-10-30' && t.amt === end, 'Apartar guarda justo lo que va a sobrar', t);
+  const v2 = await page.$eval('#view', (e) => e.innerText);
+  ok(/Ahorro para viajes[\s\S]{0,120}Apartado/.test(v2) && new RegExp('Te quedan \\$' + quedan + ' de \\$19,133').test(v2) && /ya apartaste \$/.test(v2), 'queda apartado sin mover lo que te queda para gastar');
+  await tab(page, 'hoy'); await wait(page, 300);
+  const hoy = await page.$eval('#view', (e) => e.innerText);
+  ok(new RegExp('A este ritmo van \\$' + hl + ' a Ahorro para viajes').test(hoy), 'Hoy dice cuánto va a tu ahorro', hoy.match(/A este ritmo[^\n]*/)?.[0]);
+  ok(/Comidas en prácticas esta semana\s*\$210 de \$500/.test(hoy) && /Ocio esta semana\s*\$[\d,]+ de \$750/.test(hoy), 'los topes del presupuesto se miden solos; la meta de la semana manda', hoy.match(/[^\n]*esta semana[^\n]*/g));
+  await tab(page, 'dinero'); await page.click('[data-act="dsub"][data-sub="budget"]'); await wait(page, 200);
+  ok(await page.$eval('#edResto', (e) => e.textContent) === '$7,067', 'en el editor lo que sobra se calcula solo');
+  ok(/Sin asignar\s*\$0/.test(await page.$eval('#edTotals', (e) => e.innerText)), 'el presupuesto queda cuadrado');
+  await page.fill('input[data-k="cats"][data-f="amt"][aria-label="Monto de Ocio"]', '3500'); await wait(page, 100);
+  ok(await page.$eval('#edResto', (e) => e.textContent) === '$6,567', 'cambia en vivo al mover otra categoría');
+  ok(await page.$eval('input[data-f="tope"][aria-label="Tope por semana de Ocio"]', (e) => e.value) === '800' && await page.$eval('input[data-f="tope"][aria-label="Tope por semana de Súper"]', (e) => e.value) === '', 'los topes por semana se editan ahí');
+  await page.fill('input[data-f="tope"][aria-label="Tope por semana de Comidas en prácticas"]', '600'); await wait(page, 60);
+  await page.selectOption('select[data-in="resto"]', ''); await wait(page, 200);
+  ok(!(await page.$('#edResto')) && await page.$eval('input[data-k="cats"][data-f="amt"][aria-label="Monto de Ahorro para viajes"]', (e) => e.value) === '6567', 'sin «lo que sobra», el ahorro se queda con su monto del mes');
+  await page.selectOption('select[data-in="resto"]', 'ahorro'); await wait(page, 200);
+  ok(await page.$eval('#edResto', (e) => e.textContent) === '$6,567', 'y se puede volver a elegir');
+  await shot(page, 'p18-editor.png');
+  await page.click('[data-act="saveBudget"]'); await wait(page, 300);
+  const cfg = await store(page, 'config/presupuesto'), g = (id) => cfg.cats.find((c) => c.id === id);
+  ok(g('ahorro').resto === true && g('ahorro').amt === 6567 && g('comidas').tope === 600 && g('ocio').tope === 800 && g('ocio').amt === 3500 && !('tope' in g('super')), 'se guarda: lo que sobra, su monto del mes y los topes', cfg.cats);
+});
+const viajesNov = () => { const sd = viajes('2026-11-01'); sd['meses/2026-11'] = { tx: [{ id: 'n1', t: 'ingreso', cat: 'papa', amt: 20000, note: '', d: '2026-11-01' }] }; return sd; };
+await run('Lo que sobró de octubre (dom 1 nov 9:00)', { time: '2026-11-01T09:00:00-06:00', seed: viajesNov() }, async ({ page }) => {
+  const oct = await txOf(page, '2026-10'), sob = oct.reduce((s, t) => s + (t.t === 'ingreso' ? t.amt : -t.amt), 0);
+  const rc = await page.$eval('.recap', (e) => e.innerText).catch(() => '');
+  ok(rc.includes('Te sobraron ' + pesos(sob)) && /que entraron/.test(rc) && /Lo que sobró va a Ahorro para viajes/.test(rc) && !/Entraron/.test(rc), 'el resumen dice cuánto sobró de lo que entró y a dónde va', rc);
+  await shot(page, 'p18-recap.png');
+  await page.click('[data-act="restoSave"]'); await wait(page, 300);
+  const t = (await txOf(page, '2026-10')).slice(-1)[0];
+  ok(t.cat === 'ahorro' && t.amt === sob && t.d === '2026-10-31' && t.note === 'Lo que sobró de octubre', 'un toque lo aparta en octubre', t);
+  const rc2 = await page.$eval('.recap', (e) => e.innerText).catch(() => '');
+  ok(rc2.includes('Ya apartaste ' + pesos(sob) + ' en Ahorro para viajes') && !(await page.$('[data-act="restoSave"]')), 'queda marcado como apartado', rc2);
+  const hoy = await page.$eval('#view', (e) => e.innerText);
+  ok(/A este ritmo van \$7,067 a Ahorro para viajes/.test(hoy), 'el día 1, sin gastos, el pronóstico es exactamente tu plan', hoy.match(/A este ritmo[^\n]*/)?.[0]);
+  await tab(page, 'dinero'); await wait(page, 300);
+  await page.click('#fab'); await wait(page, 300);
+  const hint = async (d) => { await page.fill('#vDesc', d); await page.dispatchEvent('#vDesc', 'input'); await wait(page, 80); return page.$eval('#vHint', (e) => e.textContent); };
+  const h1 = await hint('Regalo para mamá'), h2 = await hint('Ahorro para el viaje');
+  ok(!h1.includes('Ahorro para viajes') && h2.includes('Ahorro para viajes'), 'adivinar por nombre ya no manda compras a tu ahorro por la palabra «para»', { h1, h2 });
 });
 
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {

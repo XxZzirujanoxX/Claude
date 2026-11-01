@@ -308,6 +308,11 @@ ul.ins li{padding:10px 12px;border-radius:10px;background:var(--bg);font-size:.9
 .edr{display:grid;grid-template-columns:1fr 108px 36px;gap:8px;align-items:center;padding:4px 0}
 .edr input{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;min-width:0}
 .edr input[type=number]{text-align:right}
+.edr .edo{display:block;text-align:right;padding:9px 10px;font-weight:650;font-variant-numeric:tabular-nums}
+.edt .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edt .per{font-size:.8rem;color:var(--muted)}
+.edsel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;margin:8px 0 0;font-size:.9rem;color:var(--muted)}
+.edsel select{flex:1 1 180px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0;color:var(--ink)}
 .addf{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:22px}
 .addf h2{font-size:1rem;font-weight:750;margin:0 0 8px}
 .addg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -636,7 +641,7 @@ li.task .bar{margin:12px 0;border-radius:0 2px 2px 0}
 .mv .wh span,.mv .dte{font-size:13px}
 .mv .amt{font-weight:600}
 .totals div{padding:12px}
-.edr input,.addg input,.addg select,.mrow input,.mrow select,.crow input,.field input,.field select,.field textarea,input.in,select.in{border:1px solid transparent;background:var(--fill);border-radius:10px;font-size:17px}
+.edr input,.edsel select,.addg input,.addg select,.mrow input,.mrow select,.crow input,.field input,.field select,.field textarea,input.in,select.in{border:1px solid transparent;background:var(--fill);border-radius:10px;font-size:17px}
 .field label,.lbl{font-size:13px;font-weight:400;text-transform:uppercase;letter-spacing:.02em}
 
 /* comida y ejercicio */
@@ -827,6 +832,7 @@ button.wh{border:0;background:none;text-align:left;padding:0;color:inherit;font:
 .recap .rlead{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px}
 .recap .rlead b{font-weight:800}.recap .rlead b.neg{color:var(--late)}
 .recap .ins{margin-top:12px}.recap .btnrow{margin-top:12px}
+.recap .rsave{margin:12px 0 0;font-size:15px;color:var(--muted)}.recap .rsave b{color:var(--ink);font-weight:650}
 .mrows{margin:0;display:grid;gap:0}
 .mrows>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;padding:9px 0;align-items:baseline}
 .mrows>div+div{background-image:linear-gradient(var(--sep),var(--sep));background-repeat:no-repeat;background-size:100% .5px;background-position:left top}
@@ -1334,10 +1340,12 @@ function recapCard(t){
   if(Number(t.slice(8))>3||!S.cfgReady||!S.diasReady)return '';
   const pym=prevYm(t.slice(0,7)),tx=S.meses[pym];
   if(!Array.isArray(tx)||!tx.some(x=>x.t==='gasto')||lsGet('midia:recap','')===pym)return '';
-  const c=pcfg(pym),budget=sumAmt(c.cats),{spentTotal,recvTotal}=sums(tx),left=budget-spentTotal,mn=MONTHS[Number(pym.slice(5))-1].toLowerCase(),pts=[];
+  const c=pcfg(pym),bl=budgetLeft(pym,tx),ri=restoInfo(pym,tx),{recvTotal}=sums(tx),spentTotal=bl.spent,mn=MONTHS[Number(pym.slice(5))-1].toLowerCase(),pts=[];
+  /* con «lo que sobra», el mes se mide contra lo que entró; sin ella, contra tu presupuesto */
+  const budget=ri?recvTotal:bl.budget,left=ri?ri.target:bl.left;
   const top=Object.entries(varSpend(tx)).map(([k,v])=>[c.cats.find(x=>x.id===k),v]).filter(([x,v])=>x&&v>0).sort((a,b)=>b[1]-a[1])[0];
   if(top){const pl=Number(top[0].amt)||0;pts.push(`Lo que más pesó: <b>${esc(top[0].name)}</b>, ${money(top[1])}${pl?(top[1]>pl?' (planeaste '+money(pl)+')':' de '+money(pl)):''}.`);}
-  if(recvTotal)pts.push(`Entraron <b>${money(recvTotal)}</b>${sumAmt(c.income)?' de '+money(sumAmt(c.income))+' que esperabas':''}.`);
+  if(recvTotal&&!ri)pts.push(`Entraron <b>${money(recvTotal)}</b>${sumAmt(c.income)?' de '+money(sumAmt(c.income))+' que esperabas':''}.`);
   let dn=0,pl=0;const sl=[];
   Object.keys(S.dias).filter(d=>d.slice(0,7)===pym&&started(d)).forEach(d=>{const k=dayCount(d);if(k.counted){dn+=k.done;pl+=k.counted;}const s=sleepHours(d);if(s!=null)sl.push(s);});
   const zz=sl.length>=3?fmtH(avgA(sl)):'';
@@ -1345,10 +1353,11 @@ function recapCard(t){
   const ent=S.tareasReady?S.tareas.filter(x=>x.estado==='entregada'&&x.entregadaEn&&ymOf(new Date(x.entregadaEn))===pym).length:0;
   if(ent)pts.push(`Entregaste <b>${ent}</b> ${ent===1?'trabajo':'trabajos'} de la escuela.`);
   return `<section class="card recap" style="--c:var(--din)"><div class="ch"><h2>Así cerró ${mn}</h2><button type="button" class="fx" data-act="recapHide" data-ym="${pym}" aria-label="Ocultar el resumen de ${mn}">×</button></div>
-    <p class="rlead">${left>=0?`Te sobraron <b>${money(left)}</b>`:`Te pasaste por <b class="neg">${money(-left)}</b>`}</p>
-    <div class="rw" style="--cat:${left<0?'var(--late)':'var(--accent)'}"><div class="top"><span>Gastaste ${money(spentTotal)}</span><span>de ${money(budget)}</span></div><div class="bar8"><i style="width:${budget?Math.round(Math.min(1,spentTotal/budget)*100):0}%"></i></div></div>
+    <p class="rlead">${left>=0?`Te sobraron <b>${money(left)}</b>`:(ri?`Gastaste <b class="neg">${money(-left)}</b> más de lo que entró`:`Te pasaste por <b class="neg">${money(-left)}</b>`)}</p>
+    <div class="rw" style="--cat:${left<0?'var(--late)':'var(--accent)'}"><div class="top"><span>Gastaste ${money(spentTotal)}</span><span>de ${money(budget)}${ri?' que entraron':''}</span></div><div class="bar8"><i style="width:${budget?Math.round(Math.min(1,spentTotal/budget)*100):0}%"></i></div></div>
     ${pts.length?'<ul class="ins">'+pts.map(x=>`<li>${x}</li>`).join('')+'</ul>':''}
-    <div class="btnrow"><button class="secondary" type="button" data-act="recapGo" data-ym="${pym}">Ver ${mn} completo</button></div></section>`;
+    ${ri&&(ri.falta>0||ri.ap>0)?`<p class="rsave">${!ri.ap?`Lo que sobró va a <b>${esc(ri.r.name)}</b>.`:`Ya apartaste <b>${money(ri.ap)}</b> en ${esc(ri.r.name)}${ri.falta>0?`; faltan <b>${money(ri.falta)}</b>`:''}.`}</p>`:''}
+    <div class="btnrow">${ri&&ri.falta>0?`<button class="primary" type="button" data-act="restoSave" data-ym="${pym}" aria-label="Apartar ${money(ri.falta)} en ${esc(ri.r.name)}">Apartar</button>`:''}<button class="secondary" type="button" data-act="recapGo" data-ym="${pym}">Ver ${mn}${ri&&ri.falta>0?'':' completo'}</button></div></section>`;
 }
 /* ================= Para ahora: lo que pide tu atención en este momento ================= */
 function focusCard(t){
@@ -1449,7 +1458,10 @@ function weekSpent(mon,cat){
   return s;
 }
 function topesSemana(mon){
-  return (getWeek(mon).metas||[]).map(toTope).filter(Boolean).map(g=>{const sp=weekSpent(mon,g.cat),c=catById(g.cat);
+  const own=(getWeek(mon).metas||[]).map(toTope).filter(Boolean),seen=new Set(own.map(g=>g.cat));
+  /* los topes del presupuesto (tope: monto por semana) valen todas las semanas; una meta de la semana manda sobre ellos */
+  const bud=rawCfg().cats.filter(c=>Number(c.tope)>0&&!seen.has(c.id)).map(c=>({cat:c.id,max:Number(c.tope)}));
+  return own.concat(bud).map(g=>{const sp=weekSpent(mon,g.cat),c=catById(g.cat);
     return {cat:g.cat,max:g.max,sp,catName:c?c.name:'esa categoría',warn:sp>=0.8*g.max&&sp<=g.max,lost:sp>g.max};});
 }
 /* ================= captura rápida (Claude reparte lo que escribes) ================= */
@@ -1574,7 +1586,8 @@ function askData(q){
     hab=has(/habit|racha|duoling|ejercic|lectur|leer|lei|cumpl|dorm|sueno|energ|despert|meta|diario/),
     sch=has(/entreg|tarea|examen|materia|clase|parcial|actividad|escuela|uni|horario|agenda/),
     ext=has(/pelicul|serie|libro|lei|calific|estrell|curso|plan de lectura/),all=!(money||hab||sch||ext);
-  if(money||all){const c=pcfg(ym);D.presupuesto={categorias:c.cats.map(x=>({cat:x.name,grupo:x.g,monto:Number(x.amt)||0})),ingresosEsperados:c.income.map(i=>({nombre:i.name,monto:Number(i.amt)||0}))};
+  if(money||all){const c=pcfg(ym),r=restoOf(c);D.presupuesto={categorias:c.cats.map(x=>Object.assign({cat:x.name,grupo:x.g,monto:Number(x.amt)||0},x.resto?{loQueSobra:true}:{},Number(x.tope)>0?{topeSemanal:Number(x.tope)}:{})),ingresosEsperados:c.income.map(i=>({nombre:i.name,monto:Number(i.amt)||0}))};
+    if(r){const tx=S.meses[ym];D.presupuesto.nota='«'+r.name+'» (loQueSobra) no tiene monto fijo: recibe lo que sobra de los ingresos después de todo lo demás; su monto es el plan del mes.';if(Array.isArray(tx))D.presupuesto.pronosticoParaAhorro=money(Math.max(0,forecast(ym,tx).end));}
     D.movimientos=Object.keys(S.meses).sort().slice(all?-2:-4).flatMap(k=>(Array.isArray(S.meses[k])?S.meses[k]:[]).map(x=>{const cc=catById(x.cat);return [x.d,x.t,cc?cc.name:'Sin categoría',Math.round(x.amt*100)/100,x.note||''];}));}
   if(hab||all){D.habitos=habits().filter(h=>!h.archived).map(h=>({id:h.id,nombre:h.name,meta:h.meta||''}));
     D.dias=Object.keys(S.dias).sort().slice(all?-30:-90).map(d=>{const x=S.dias[d]||{},c=dayCount(d);return {d,habitos:x.habits||{},cumplidos:fmtN(c.done)+'/'+c.counted,sueno:sleepHours(d),durmio:x.durmio||null,desperto:x.wake||null,energia:typeof x.energy==='number'?x.energy:null};});}
@@ -1742,11 +1755,11 @@ function hoyDinero(t){
   if(!S.cfgReady||tx===undefined)body=loading();
   else if(!cfg||!(cfg.cats||[]).length)body='<p class="empty">Arma tu presupuesto para empezar.</p>';
   else{
-    const budget=sumAmt(pcfg(ym).cats),{spentTotal}=sums(tx),left=budget-spentTotal;
-    const hoy=tx.filter(x=>x.t!=='ingreso'&&x.d===t).reduce((s,x)=>s+x.amt,0);
+    const bl=budgetLeft(ym,tx),left=bl.left;
+    const hoy=tx.filter(x=>x.t==='gasto'&&x.d===t&&!(bl.r&&x.cat===bl.r.id)).reduce((s,x)=>s+x.amt,0);
     const f=forecast(ym,tx),mn=MONTHS[new Date().getMonth()].toLowerCase(),tp=topesSemana(mondayOf(t));
     body=`<p class="lead" style="font-size:1.4rem;margin:0 0 4px">${left>=0?`Te quedan <b>${money(left)}</b> este mes`:`Te pasaste por <b style="color:var(--late)">${money(-left)}</b>`}</p>`
-      +`<p class="muted small" style="margin:0">${hoy?'Hoy llevas '+money(hoy)+' en gastos.':'Hoy no has registrado gastos.'} A este ritmo cierras ${mn} con ${money(Math.abs(f.end))} ${f.end<0?'en contra':'libres'}.</p>`
+      +`<p class="muted small" style="margin:0">${hoy?'Hoy llevas '+money(hoy)+' en gastos.':'Hoy no has registrado gastos.'} ${fcText(f,mn,false)}</p>`
       +tp.map(g=>`<div class="rw" style="--cat:${g.lost?'var(--late)':(g.warn?'var(--soon)':'var(--ok)')};margin-top:12px"><div class="top"><span>${esc(g.catName)} esta semana</span><span>${money(g.sp)} de ${money(g.max)}</span></div><div class="bar8"><i style="width:${Math.min(100,Math.round(g.sp/g.max*100))}%"></i></div></div>`).join('')
       +`<div class="btnrow"><button class="secondary" type="button" data-act="movOpen">Registrar gasto</button></div>`;
   }
@@ -2232,8 +2245,30 @@ function effCfg(c,y){const income=c.income.map(i=>weeklyFor(i,y)),wk=c.cats.map(
   const delta=(sumAmt(income)-sumAmt(c.income))-(sumAmt(wk)-sumAmt(c.cats.filter(k=>!k.absorb)));
   const cats=c.cats.map((k,i)=>{if(!k.absorb||!delta)return k.absorb?k:wk[i];
     return Object.assign({},k,{amt:Math.max(0,(Number(k.amt)||0)+delta),note:'Base '+money(k.amt)+(delta>0?' + ':' − ')+money(Math.abs(delta))+': pagos de la semana vs. súper, comidas y ocio de esas semanas'});});
+  /* resto:true (solo una): esa categoría de ahorro recibe lo que sobra de tus ingresos después de todo lo demás */
+  const ri=cats.findIndex(k=>k.resto);
+  if(ri>=0){const others=cats.reduce((s,k,i)=>i===ri?s:s+(Number(k.amt)||0),0);cats[ri]=Object.assign({},cats[ri],{amt:Math.max(0,Math.round((sumAmt(income)-others)*100)/100)});}
   return {income,cats};}
 const pcfg=ym=>effCfg(rawCfg(),ym||S.din.ym);
+const restoOf=c=>(c||pcfg()).cats.find(x=>x.resto)||null;
+/* «te quedan»: tu presupuesto sin la categoría de lo que sobra (eso no se gasta, se aparta) */
+function budgetLeft(ym,tx){const c=pcfg(ym),r=restoOf(c),{spent,spentTotal}=sums(tx),budget=sumAmt(c.cats)-(r?Number(r.amt)||0:0),sp=spentTotal-(r?spent[r.id]||0:0);return {budget,spent:sp,left:budget-sp,r};}
+/* lo que sobra del mes: en el mes actual, el pronóstico; en uno pasado, lo que de verdad quedó (entró − gastaste − lo que faltó pagar) */
+function restoInfo(ym,tx){
+  const c=pcfg(ym),r=restoOf(c);if(!r||!Array.isArray(tx))return null;
+  const {spent,spentTotal,recvTotal}=sums(tx),ap=spent[r.id]||0,cur=ymOf(new Date()),plan=Number(r.amt)||0;let target=plan;
+  if(ym===cur)target=Math.round(forecast(ym,tx).end); // pronóstico: en pesos cerrados
+  else if(ym<cur){const owed=c.cats.filter(x=>x.g==='fijos'||x.g==='subs').reduce((s,x)=>s+Math.max(0,(Number(x.amt)||0)-(spent[x.id]||0)),0);target=recvTotal-(spentTotal-ap)-owed;}
+  target=Math.round(target*100)/100;
+  return {r,ap,plan,target,falta:Math.max(0,Math.round((target-ap)*100)/100),cur:ym===cur,past:ym<cur};
+}
+function restoLine(ri){const n=esc(ri.r.name),v=money(Math.max(0,ri.target)),a=ri.ap?' · '+(ri.past?'apartaste ':'ya apartaste ')+money(ri.ap):'';
+  return ri.cur?`${n}: a este ritmo van ${v}${a}`:(ri.past?`${n}: te sobraron ${v}${a}`:`${n}: lo que sobre (tu plan: ${money(ri.plan)})`);}
+function restoSave(ym){
+  const tx=S.meses[ym],ri=restoInfo(ym,tx);if(!ri||!(ri.falta>0))return;
+  const mn=MONTHS[Number(ym.slice(5))-1].toLowerCase(),t={id:newId(),t:'gasto',cat:ri.r.id,amt:ri.falta,note:ri.past?'Lo que sobró de '+mn:'',d:ri.past?monthBounds(ym).max:defaultDate(ym)};
+  if(addTx(ym,t))toast(ri.r.name+': '+money(t.amt)+' apartados',()=>{saveTx(ym,(S.meses[ym]||[]).filter(x=>x.id!==t.id));render(true);});
+}
 const catById=id=>pcfg().cats.find(c=>c.id===id);
 const incById=id=>pcfg().income.find(c=>c.id===id);
 function monthBounds(ym){const [y,m]=ym.split('-').map(Number);return {min:ym+'-01',max:ym+'-'+pad(new Date(y,m,0).getDate())};}
@@ -2254,18 +2289,18 @@ function vDin(){
   let h=header('Dinero','');
   h+=`<div class="monthnav"><button class="ib" type="button" data-act="month" data-dir="-1" aria-label="Mes anterior">‹</button><strong>${MONTHS[m-1]} ${y}</strong><button class="ib" type="button" data-act="month" data-dir="1" aria-label="Mes siguiente">›</button></div>`;
   if(!S.cfgReady||tx===undefined)return h+loading();
-  const c=pcfg(),budget=sumAmt(c.cats),{spent,spentTotal,recvTotal}=sums(tx),left=budget-spentTotal;
+  const c=pcfg(),bl=budgetLeft(ym,tx),budget=bl.budget,left=bl.left,isR=x=>!!bl.r&&x.id===bl.r.id,{spent,recvTotal}=sums(tx);
   if(!c.cats.length)h+='<p class="lead">Arma tu presupuesto para empezar.</p>';
   else{
     h+=`<p class="lead${left<0?' over':''}">${left>=0?`Te quedan <b class="num">${money(left)}</b> de ${money(budget)}`:`Te pasaste por <b class="num">${money(-left)}</b> este mes`}</p>`;
-    const den=Math.max(budget,spentTotal)||1;let segs='',leg='';
-    GROUPS.forEach(g=>{const gs=c.cats.filter(x=>x.g===g.id).reduce((s,x)=>s+(spent[x.id]||0),0);
+    const den=Math.max(budget,bl.spent)||1;let segs='',leg='';
+    GROUPS.forEach(g=>{const l=c.cats.filter(x=>x.g===g.id&&!isR(x)),gs=l.reduce((s,x)=>s+(spent[x.id]||0),0);
       if(gs>0)segs+=`<i style="width:${(gs/den*100).toFixed(2)}%;background:${g.c}"></i>`;
-      if(c.cats.some(x=>x.g===g.id))leg+=`<span class="num" style="--c:${g.c}">${esc(g.name)} ${money(gs)}</span>`;});
+      if(l.length)leg+=`<span class="num" style="--c:${g.c}">${esc(g.name)} ${money(gs)}</span>`;});
     const orphan=Object.keys(spent).filter(id=>!catById(id)).reduce((s,id)=>s+spent[id],0);
     if(orphan>0)segs+=`<i style="width:${(orphan/den*100).toFixed(2)}%;background:var(--muted)"></i>`;
-    const inc=sumAmt(c.income);
-    h+=`<div class="stack" aria-hidden="true">${segs}</div><div class="legend">${leg}</div>${inc?`<p class="muted small num" style="margin:10px 0 0">Ingresos recibidos: ${money(recvTotal)} de ${money(inc)}</p>`:''}`;
+    const inc=sumAmt(c.income),ri=bl.r&&restoInfo(ym,tx);
+    h+=`<div class="stack" aria-hidden="true">${segs}</div><div class="legend">${leg}</div>${inc?`<p class="muted small num" style="margin:10px 0 0">Ingresos recibidos: ${money(recvTotal)} de ${money(inc)}</p>`:''}${ri?`<p class="muted small num" style="margin:2px 0 0">${restoLine(ri)}</p>`:''}`;
   }
   h+=pendingCard(tx);
   h+=`<div class="seg" role="tablist">${[['res','Resumen'],['cats','Categorías'],['movs','Movimientos'],['budget','Presupuesto']].map(([k,l])=>`<button type="button" data-act="dsub" data-sub="${k}" aria-pressed="${D.sub===k}">${l}</button>`).join('')}</div>`;
@@ -2274,7 +2309,7 @@ function vDin(){
 }
 function catsView(tx){
   const c=pcfg();if(!c.cats.length)return '<p class="empty" style="text-align:center;padding:24px 8px">Aún no tienes categorías. <button class="link" type="button" data-act="dsub" data-sub="budget">Armar presupuesto</button></p>';
-  const {spent,recv}=sums(tx);let h='';
+  const {spent,recv}=sums(tx),ri=restoInfo(S.din.ym,tx),tps=S.din.ym===ymOf(new Date())?topesSemana(mondayOf(todayISO())):[];let h='';
   if(c.income.length){
     const plan=sumAmt(c.income),got=c.income.reduce((s,i)=>s+(recv[i.id]||0),0);
     h+=`<section class="bg" style="--c:var(--ok)"><div class="bgh"><h2>Ingresos</h2><span class="num">${money(got)} de ${money(plan)}</span></div>`;
@@ -2283,14 +2318,15 @@ function catsView(tx){
     h+='</section>';
   }
   GROUPS.forEach(g=>{
-    const list=c.cats.filter(x=>x.g===g.id);if(!list.length)return;
+    const list=c.cats.filter(x=>x.g===g.id).map(x=>ri&&x.id===ri.r.id?Object.assign({},x,{amt:Math.max(0,ri.target),_r:1}):x);if(!list.length)return;
     const gb=sumAmt(list),gs=list.reduce((s,x)=>s+(spent[x.id]||0),0);
     h+=`<section class="bg" style="--c:${g.c}"><div class="bgh"><h2>${esc(g.name)}</h2><span class="num">${money(gs)} de ${money(gb)}</span></div>`;
     list.forEach(x=>{const s=spent[x.id]||0,rest=x.amt-s,p=x.amt?Math.min(100,s/x.amt*100):(s>0?100:0),over=rest<0,save=g.id==='ahorro';
-      let bot;if(over)bot=`<span class="overtxt">Te pasaste por ${money(-rest)}</span>`;
-      else if(rest===0&&x.amt>0)bot=`<span class="donetxt">${save?'Apartado':'Pagado'}</span>`;
+      let bot;if(over)bot=`<span class="overtxt">${x._r?`Apartaste ${money(-rest)} más de lo que ${ri.past?'sobró':'va a sobrar'}`:`Te pasaste por ${money(-rest)}`}</span>`;
+      else if(rest===0&&(x.amt>0||x._r&&s>0))bot=`<span class="donetxt">${save?'Apartado':'Pagado'}</span>`;
       else bot=`<span>${save?'Por apartar':'Te quedan'} ${money(rest)}</span>`+(x.quick&&rest>0?`<button class="pill" type="button" data-act="quick" data-kind="gasto" data-id="${esc(x.id)}">${save?'Apartar':'Marcar pagado'}</button>`:'');
-      h+=`<div class="brow"><div class="top"><span class="nm">${esc(x.name)}</span><span class="v">${money(s)} <span class="of">/ ${money(x.amt)}</span></span></div>${x.note?`<div class="bnote">${esc(x.note)}</div>`:''}<div class="bbar"><i style="width:${p}%;background:${over?'var(--late)':g.c}"></i></div><div class="bbot">${bot}</div></div>`;});
+      const nt=[x._r?(ri.past?'Lo que sobró después de todo lo demás':'Lo que sobra después de todo lo demás')+(ri.cur?' · tu plan: '+money(ri.plan):''):'',x.note||'',(tp=>tp?'Tope semanal: llevas '+money(tp.sp)+' de '+money(tp.max):'')(tps.find(g=>g.cat===x.id))].filter(Boolean).join(' · ');
+      h+=`<div class="brow"><div class="top"><span class="nm">${esc(x.name)}</span><span class="v">${money(s)} <span class="of">/ ${money(x.amt)}</span></span></div>${nt?`<div class="bnote">${esc(nt)}</div>`:''}<div class="bbar"><i style="width:${p}%;background:${over?'var(--late)':g.c}"></i></div><div class="bbot">${bot}</div></div>`;});
     h+='</section>';
   });
   return h;
@@ -2308,23 +2344,31 @@ function budgetView(){
   let h=`<div class="totals" id="edTotals">${totalsHtml()}</div>`;
   h+='<section class="ed"><h2>Ingresos</h2>'+d.income.map((x,i)=>edRow('income',i,x)).join('')+'<button class="link" type="button" data-act="addInc">Agregar ingreso</button></section>';
   GROUPS.forEach(g=>{const rows=d.cats.map((c,i)=>({c,i})).filter(x=>x.c.g===g.id);if(!rows.length)return;
-    h+=`<section class="ed"><h2>${esc(g.name)}</h2>${rows.map(x=>edRow('cats',x.i,x.c)).join('')}</section>`;});
+    const sel=g.id==='ahorro'?`<label class="edsel"><span>Lo que sobre va a</span><select data-in="resto" aria-label="Lo que sobre de tus ingresos va a"><option value="">Ninguna: montos fijos</option>${rows.map(x=>`<option value="${esc(x.c.id)}"${x.c.resto?' selected':''}>${esc(x.c.name||'Sin nombre')}</option>`).join('')}</select></label>`:'';
+    h+=`<section class="ed"><h2>${esc(g.name)}</h2>${rows.map(x=>edRow('cats',x.i,x.c)).join('')}${sel}</section>`;});
+  const vr=d.cats.map((c,i)=>({c,i})).filter(x=>x.c.g==='var');
+  if(vr.length)h+=`<section class="ed"><h2>Topes por semana</h2><p class="hint" style="margin:0 0 6px">Opcional. Te aviso al llegar al 80% y si te pasas.</p>${vr.map(x=>`<div class="edr edt"><span class="nm">${esc(x.c.name||'Sin nombre')}</span><input type="number" inputmode="numeric" min="0" value="${Number(x.c.tope)>0?Number(x.c.tope):''}" placeholder="Sin tope" data-in="bud" data-k="cats" data-i="${x.i}" data-f="tope" aria-label="Tope por semana de ${esc(x.c.name)}"><span class="per">/sem</span></div>`).join('')}</section>`;
   h+=`<div class="addf"><h2>Agregar categoría</h2><div class="addg"><input class="full" id="nName" placeholder="Nombre, ej. Regalos" maxlength="40" aria-label="Nombre de la categoría">
     <select id="nGroup" aria-label="Grupo">${GROUPS.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select>
     <input id="nAmt" type="number" inputmode="numeric" min="0" placeholder="Monto" aria-label="Monto mensual"><button class="secondary full" type="button" data-act="addCat">Agregar categoría</button></div></div>`;
   h+=`<div class="savebar"><button class="secondary" type="button" data-act="discard" ${S.din.dirty?'':'disabled'}>Descartar</button><button class="primary" type="button" data-act="saveBudget" ${S.din.dirty?'':'disabled'}>Guardar presupuesto</button></div>`;
   return h;
 }
-function edRow(k,i,x){const w=Number(x.sem)>0,f=w?'sem':'amt',v=w?Number(x.sem):(Number(x.amt)||0);
+function edRow(k,i,x){
+  if(k==='cats'&&x.resto){const v=(effCfg(S.din.draft,S.din.ym).cats[i]||{}).amt||0;
+    return `<div class="edr"><input value="${esc(x.name)}" data-in="bud" data-k="cats" data-i="${i}" data-f="name" aria-label="Nombre" maxlength="40"><output class="edo" id="edResto" aria-label="Lo que sobra este mes">${money(v)}</output><button class="del" type="button" data-act="rmRow" data-k="cats" data-i="${i}" aria-label="Quitar ${esc(x.name)}">×</button></div><p class="hint" style="margin:0 0 8px">Lo que sobra de tus ingresos después de todo lo demás. Se calcula solo: si gastas menos, sube.</p>`;}
+  const w=Number(x.sem)>0,f=w?'sem':'amt',v=w?Number(x.sem):(Number(x.amt)||0);
   let hint=x.absorb?'<p class="hint" style="margin:0 0 8px">Monto base. Cada mes sube o baja según los pagos semanales de más o de menos.</p>':'';if(w){const ym=S.din.ym,ps=paysIn(ym),mm=MONTHS[Number(ym.split('-')[1])-1].toLowerCase();hint=`<p class="hint" style="margin:0 0 8px">Monto por ${k==='income'?'viernes':'semana'}. En ${mm} cuentan ${ps.length}${k==='income'?' pagos: '+ps.map(shortDate).join(', '):' semanas'}.</p>`;}
   return `<div class="edr"><input value="${esc(x.name)}" data-in="bud" data-k="${k}" data-i="${i}" data-f="name" aria-label="Nombre" maxlength="40"><input type="number" inputmode="numeric" min="0" value="${v}" data-in="bud" data-k="${k}" data-i="${i}" data-f="${f}" aria-label="${w?'Monto semanal de ':'Monto de '}${esc(x.name)}"><button class="del" type="button" data-act="rmRow" data-k="${k}" data-i="${i}" aria-label="Quitar ${esc(x.name)}">×</button></div>`+hint;}
 function totalsHtml(){const d=S.din.draft,ec=effCfg(d,S.din.ym),inc=sumAmt(ec.income),asg=sumAmt(ec.cats),diff=inc-asg;
   return `<div><small>Ingresos</small><strong>${money(inc)}</strong></div><div><small>Asignado</small><strong>${money(asg)}</strong></div><div class="${diff<0?'bad':(diff===0?'good':'')}"><small>${diff<0?'Te faltan':'Sin asignar'}</small><strong>${money(Math.abs(diff))}</strong></div>`;}
-function markDirty(){S.din.dirty=true;const t=$('#edTotals');if(t)t.innerHTML=totalsHtml();document.querySelectorAll('[data-act="discard"],[data-act="saveBudget"]').forEach(b=>b.disabled=false);}
+function markDirty(){S.din.dirty=true;const t=$('#edTotals');if(t)t.innerHTML=totalsHtml();
+  const o=$('#edResto'),d=S.din.draft,ri=d?d.cats.findIndex(c=>c.resto):-1;if(o&&ri>=0)o.textContent=money(effCfg(d,S.din.ym).cats[ri].amt);document.querySelectorAll('[data-act="discard"],[data-act="saveBudget"]').forEach(b=>b.disabled=false);}
 function addTx(ym,t){const tx=S.meses[ym];if(!Array.isArray(tx)){toast('Espera a que carguen tus movimientos.');return false;}saveTx(ym,[...tx,t]);render(true);return true;}
 function quickAdd(kind,id,ym0){
   const ym=ym0||S.din.ym,tx=S.meses[ym];if(!Array.isArray(tx))return;const {spent,recv}=sums(tx);
   const src=kind==='ingreso'?incById(id):catById(id);if(!src)return;
+  if(kind==='gasto'&&src.resto){restoSave(ym);return;}
   const got=(kind==='ingreso'?recv:spent)[id]||0;let amt=src.amt-got,note='';if(amt<=0)return;
   if(kind==='ingreso'&&src.sem>0){const f=paysIn(ym),idx=Math.min(f.length-1,Math.round(got/src.sem));amt=Math.min(Number(src.sem),amt);if(f[idx])note='Pago del '+shortDate(f[idx]);}
   const t={id:newId(),t:kind,cat:id,amt,note,d:defaultDate(ym)};
@@ -2380,7 +2424,8 @@ function kwGuess(desc){
   for(const id in KW){if(!catById(id))continue;KW[id].forEach(k=>{const kk=k.trim(),hit=kk.length<=3?d.indexOf(' '+kk+' ')!==-1:d.indexOf(' '+kk)!==-1;if(hit&&kk.length>bl){bl=kk.length;best=id;}});}
   return best;
 }
-function nameGuess(desc){const d=' '+norm(desc)+' ',hit=pcfg().cats.find(c=>norm(c.name).split(/\s+/).filter(w=>w.length>3).some(w=>d.indexOf(' '+w)!==-1));return hit?hit.id:null;}
+const NAME_STOP=new Set(['para','como','cada','entre','sobre','desde','hasta','pero','todo','todos','otro','otra','otros','otras']);
+function nameGuess(desc){const d=' '+norm(desc)+' ',sv=/ (ahorr|apart|invert)/.test(d),hit=pcfg().cats.find(c=>(!c.resto||sv)&&norm(c.name).split(/\s+/).filter(w=>w.length>3&&!NAME_STOP.has(w)).some(w=>d.indexOf(' '+w)!==-1));return hit?hit.id:null;}
 function localGuess(desc){return kwGuess(desc)||nameGuess(desc);}
 /* aprende de tus movimientos: lo que escribes se parece a lo que ya clasificaste antes */
 function histIndex(){return memo('hist',()=>{const out=[];Object.keys(S.meses).forEach(ym=>(S.meses[ym]||[]).forEach(t=>{if(t.t!=='gasto'||!String(t.note||'').trim()||!catById(t.cat))return;out.push({k:merchKey(t.note),n:norm(t.note).trim(),w:toks(t.note),cat:t.cat,amt:t.amt});}));return out;});}
@@ -2512,14 +2557,18 @@ $('#eGuardar').addEventListener('click',()=>{
 
 function varSpend(tx,maxDay){const r={};(tx||[]).forEach(t=>{if(t.t!=='gasto'||!isVarCat(t.cat))return;if(maxDay&&Number(t.d.slice(8))>maxDay)return;r[t.cat||'']=(r[t.cat||'']||0)+t.amt;});return r;}
 function forecast(ym,tx){
-  const c=pcfg(ym),{spent,recv}=sums(tx),day=new Date().getDate(),dim=daysIn(ym),frac=day/dim;
-  let fixed=0,varBud=0;c.cats.forEach(x=>{const a=Number(x.amt)||0;if(x.g==='var')varBud+=a;else fixed+=Math.max(spent[x.id]||0,a);});
-  const vs=varSpend(tx),varNow=Object.values(vs).reduce((a,b)=>a+b,0),w=Math.min(1,day/14);
-  // al inicio del mes pesa más tu presupuesto; conforme avanza, tu ritmo real
-  const varProj=Math.max(varNow,w*(varNow/frac)+(1-w)*(varNow+varBud*(1-frac)));
+  const c=pcfg(ym),r=restoOf(c),{spent,recv}=sums(tx),day=new Date().getDate(),dim=daysIn(ym),frac=day/dim,done=(day-1)/dim;
+  let fixed=0,varBud=0;c.cats.forEach(x=>{const a=Number(x.amt)||0;if(x.g==='var')varBud+=a;else if(!r||x.id!==r.id)fixed+=Math.max(spent[x.id]||0,a);});
+  const vs=varSpend(tx),varNow=Object.values(vs).reduce((a,b)=>a+b,0),w=Math.min(1,(day-1)/13);
+  // al inicio del mes pesa más tu presupuesto (y el día de hoy aún no termina); conforme avanza, tu ritmo real
+  const varProj=Math.max(varNow,w*(varNow/frac)+(1-w)*(varNow+varBud*(1-done)));
   const incProj=c.income.reduce((s,i)=>s+Math.max(recv[i.id]||0,Number(i.amt)||0),0)+Object.keys(recv).filter(k=>!incById(k)).reduce((s,k)=>s+recv[k],0);
-  return {day,dim,frac,varNow,varProj,varBud,end:incProj-fixed-varProj,vs};
+  return {day,dim,frac,varNow,varProj,varBud,end:incProj-fixed-varProj,vs,r};
 }
+/* con «lo que sobra», el final del mes no queda «libre»: va a tu ahorro */
+const fcText=(f,mn,b)=>{const B=s=>b?`<b class="num">${s}</b>`:s;
+  if(f.r)return f.end>=0?`A este ritmo van ${B(money(f.end))} a ${esc(f.r.name)} este mes.`:`A este ritmo cierras ${mn} con ${B(money(-f.end))} en contra y nada para ${esc(f.r.name)}.`;
+  return `A este ritmo cierras ${mn} con ${B(money(Math.abs(f.end)))} ${f.end<0?'en contra':'libres'}.`;};
 function paceNotes(ym,f){
   const out=[],prev=S.meses[prevYm(ym)],pm=MONTHS[parse(prevYm(ym)+'-01').getMonth()].toLowerCase(),vars=pcfg().cats.filter(x=>x.g==='var');
   if(Array.isArray(prev)&&prev.length){const pv=varSpend(prev,f.day);
@@ -2531,8 +2580,9 @@ function paceNotes(ym,f){
 function forecastCard(ym,tx){
   const f=forecast(ym,tx),mn=MONTHS[parse(ym+'-01').getMonth()].toLowerCase(),notes=paceNotes(ym,f);
   return `<section class="card" style="--c:var(--din)"><div class="ch"><h2>Pronóstico del mes</h2><span class="aside num">día ${f.day} de ${f.dim}</span></div>
-    <p class="fc-lead${f.end<0?' over':''}">A este ritmo cierras ${mn} con <b class="num">${money(Math.abs(f.end))}</b> ${f.end<0?'en contra':'libres'}.</p>
+    <p class="fc-lead${f.end<0?' over':''}">${fcText(f,mn,true)}</p>
     <div class="fc-row num"><span>Variables: llevas ${money(f.varNow)}</span><span>van para ${money(f.varProj)} de ${money(f.varBud)}</span></div>
+    ${f.r?`<div class="fc-row num"><span>${esc(f.r.name)}: tu plan ${money(Number(f.r.amt)||0)}</span><span>${(sums(tx).spent[f.r.id]||0)?'apartado '+money(sums(tx).spent[f.r.id]):'lo apartas al final'}</span></div>`:''}
     ${f.day<7?'<p class="muted small" style="margin:0">Con pocos días del mes, la estimación se apoya en tu presupuesto.</p>':''}
     ${notes.length?'<ul class="ins">'+notes.map(n=>'<li>'+n.txt+'</li>').join('')+'</ul>':''}</section>`;
 }
@@ -2565,7 +2615,7 @@ function dinWeekCard(ym,tx){
     c2.cats.filter(x=>x.g==='fijos'||x.g==='subs').forEach(x=>{const a=Number(x.amt)||0,dd=firstDay(tx,'gasto',x.id)||firstDay(prev,'gasto',x.id);if(a<=0||!dd)return;const d=at2(dd);if(d<=end)rows.push({d,name:x.name,amt:-a,note:'Pago de '+mn,cls:''});});
     c2.income.forEach(i=>{if(incWeekly(i.id,ym))return;const a=Number(i.amt)||0,dd=firstDay(tx,'ingreso',i.id)||firstDay(prev,'ingreso',i.id);if(a<=0||!dd)return;const d=at2(dd);if(d<=end)rows.push({d,name:i.name,amt:a,note:'Llega en '+mn,cls:'',inc:true});});}
   rows.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
-  const owed=pcfg().cats.filter(x=>x.g!=='var').reduce((s,x)=>s+Math.max(0,(Number(x.amt)||0)-(spent[x.id]||0)),0),avail=recvTotal-spentTotal;
+  const owed=pcfg().cats.filter(x=>x.g!=='var'&&!x.resto).reduce((s,x)=>s+Math.max(0,(Number(x.amt)||0)-(spent[x.id]||0)),0),avail=recvTotal-spentTotal;
   const li=r=>{const dt=parse(r.d);return `<li><span class="cal-d"><b>${dt.getDate()}</b><small>${r.d===t0?'hoy':SHORT[wdOf(r.d)-1]}</small></span><span class="cal-t">${esc(r.name)}${r.note?`<small class="${r.cls}">${esc(r.note)}</small>`:''}</span><span class="cal-a num${r.inc?' inc':''}">${r.inc?'+':'−'}${money(Math.abs(r.amt))}${r.btn||''}</span></li>`;};
   return `<section class="card" style="--c:var(--ent)"><div class="ch"><h2>Próximos 7 días</h2></div>
     ${rows.length?'<ul class="cal">'+rows.map(li).join('')+'</ul>':'<p class="empty">No hay pagos ni ingresos esperados esta semana.</p>'}
@@ -3233,8 +3283,9 @@ function weekMoney(mon){
   yms.forEach(ym=>(S.meses[ym]||[]).forEach(t=>{if(t.t!=='gasto'||t.d<mon||t.d>end)return;const c=catById(t.cat),n=c?c.name:'Sin categoría';by[n]=(by[n]||0)+t.amt;total+=t.amt;}));
   const oc=pcfg(ymOf(new Date())).cats.find(c=>c.id==='ocio');
   const out={gastoTotalSemana:money(total),porCategoria:Object.keys(by).sort((a,b)=>by[b]-by[a]).map(k=>k+': '+money(by[k]))};
-  if(oc)out.ocio=(by[oc.name]?money(by[oc.name]):money(0))+' de '+money((Number(oc.amt)||0)/4)+' por semana';
-  const ym=ymOf(new Date()),tx=S.meses[ym];if(Array.isArray(tx)){const b=sumAmt(pcfg(ym).cats),sp=sums(tx).spentTotal;out.mes='Te quedan '+money(b-sp)+' de '+money(b)+' este mes';}
+  if(oc)out.ocio=(by[oc.name]?money(by[oc.name]):money(0))+' de '+money(Number(oc.tope)>0?Number(oc.tope):(Number(oc.amt)||0)/4)+' por semana';
+  const ym=ymOf(new Date()),tx=S.meses[ym];if(Array.isArray(tx)){const bl=budgetLeft(ym,tx);out.mes='Te quedan '+money(bl.left)+' de '+money(bl.budget)+' este mes';
+    if(bl.r){const f=forecast(ym,tx);out.ahorro=bl.r.name+' recibe lo que sobre del mes: a este ritmo '+money(Math.max(0,f.end))+' (plan '+money(Number(bl.r.amt)||0)+')';}}
   return out;
 }
 
@@ -3495,6 +3546,7 @@ const ACT={
     const t=todayISO();S.hab.day=t;S.hab.week=mondayOf(t);S.hab.view='dia';goTab('habitos');setTimeout(()=>{const x=$('#hBed');if(x)x.scrollIntoView({block:'center',behavior:'smooth'});},260);},
   recapHide:b=>{lsSet('midia:recap',b.dataset.ym);render(true);toast('Listo. Lo tienes completo en Dinero.');},
   recapGo:b=>{S.din.ym=b.dataset.ym;goTab('dinero');},
+  restoSave:b=>restoSave(b.dataset.ym),
   capAgain:()=>{S.cap.res=null;S.cap.sel=[];S.cap.text='';render(true);const ta=$('#capIn');if(ta)ta.focus();},
   pausaOpen:()=>openPausa(),
   pausaEnd:b=>{const t=todayISO(),before=pausas(),p=before.find(x=>x.id===b.dataset.id);if(!p)return;
@@ -3551,6 +3603,7 @@ const ACT={
     S.din.draft.cats.push({id:newId(),name,g,amt,quick:g==='fijos'||g==='subs'||g==='ahorro'});S.din.dirty=true;render(true);},
   discard:()=>{S.din.draft=null;S.din.dirty=false;render(true);},
   saveBudget:()=>{const d=clone(S.din.draft);d.income=d.income.filter(i=>String(i.name).trim());d.cats=d.cats.filter(c=>String(c.name).trim());
+    const ec=effCfg(d,S.din.ym);let one=false;d.cats.forEach((c,i)=>{if(c.resto){if(one)delete c.resto;else{one=true;c.amt=ec.cats[i].amt;}}if(!(Number(c.tope)>0))delete c.tope;});
     S.cfg.presupuesto=Object.assign({},S.cfg.presupuesto||{},d);S.din.draft=null;S.din.dirty=false;persist('config/presupuesto',()=>S.cfg.presupuesto);render(true);toast('Presupuesto guardado');},
   xfiltro:b=>{S.ext.filtro=b.dataset.id;S.ext.lim={};render(true);},
   recoAsk:()=>askRecos(),
@@ -3593,7 +3646,11 @@ $('#view').addEventListener('input',e=>{
   if(k==='note'){const d=el.dataset.date,v=el.value;if(locked(d))return;editDay(d,x=>{x.note=v;},700);autoGrow(el);const c=document.getElementById('jCount');if(c){const n=wordCount(v);c.textContent=n?n+(n===1?' palabra':' palabras'):'';}}
   else if(k==='cap'){S.cap.text=el.value;const sb=el.parentNode.querySelector('.capsend');if(sb&&!S.cap.busy)sb.disabled=!el.value.trim();if(el.value){el.style.height='auto';el.style.height=Math.min(180,el.scrollHeight+2)+'px';}else el.style.height='';}
   else if(k==='refl'){const f=el.dataset.f,v=el.value;editWeek(S.hab.week,w=>{w[f]=v;},700);}
-  else if(k==='bud'){const row=S.din.draft&&S.din.draft[el.dataset.k][Number(el.dataset.i)];if(!row)return;row[el.dataset.f]=(el.dataset.f==='amt'||el.dataset.f==='sem')?(Number(el.value)||0):el.value;markDirty();}
+  else if(k==='bud'){const row=S.din.draft&&S.din.draft[el.dataset.k][Number(el.dataset.i)];if(!row)return;row[el.dataset.f]=(el.dataset.f==='amt'||el.dataset.f==='sem'||el.dataset.f==='tope')?(Number(el.value)||0):el.value;markDirty();}
+  else if(k==='resto'){const d=S.din.draft;if(!d)return;const ec=effCfg(d,S.din.ym);
+    /* la que deja de recibir lo que sobra se queda con el monto que tenía este mes */
+    d.cats.forEach((c,i)=>{if(c.id===el.value)c.resto=true;else if(c.resto){delete c.resto;c.amt=ec.cats[i].amt;}});
+    markDirty();render(true);}
 });
 $('#view').addEventListener('change',e=>{
   const el=e.target,k=el.dataset&&el.dataset.ch;if(!k)return;const d=el.dataset.date;if(locked(d))return;
