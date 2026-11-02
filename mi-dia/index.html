@@ -4221,12 +4221,12 @@ function rTrips(){
   return h;
 }
 function tripPrompt(t,keys,cap){
-  return 'Eres el asesor de imagen personal de '+quien(true)+'. Va de viaje y necesita outfits por día y una maleta eficiente.\n'+NOCOLOR+rulesEstilista(true)+
+  return 'Eres el asesor de imagen personal de '+quien(true)+'. Va de viaje y necesita outfits por día y una maleta eficiente.\n'+CRITERIO+rulesEstilista(true)+
   '## Viaje\nDestino: '+t.destino+'\nFechas: '+t.inicio+' a '+t.fin+'\nPlanes: '+(t.planes||'(no dio detalles)')+'\nClima: '+(t.clima||'no lo dio: estímalo para ese destino y esas fechas, y menciónalo en "consejo"')+'\n\n'+
   '## Sus preferencias y reglas\n'+(S.cfg.prefs||'(sin reglas)')+'\nEn viajes a clima fresco sí puede usar capas (suéter o sudadera), respetando sus condiciones.\n\n'+
   rulesUso().replace('cuántas veces más puede usarse la prenda en este periodo','cuántas veces puede usarse la prenda en el viaje (asume que todo está limpio)')+rulesOutfit(true)+gustosTxt()+
   '## Maleta\n- Repite pantalones y calzado lo más posible para viajar ligero, respetando disp; las partes altas no se repiten.\n- Usa pocos pares de zapatos (idealmente 1 o 2).\n- El día de salida y el de regreso son días de traslado: cómodos.\n\n'+
-  '## Inventario (id | prenda | tipo · corte | volumen y función | material | estado | disp)\n'+invForPrompt(cap)+'\n\n'+
+  '## Inventario (id | prenda | tipo · corte | volumen y función | color | material | estado | combina | disp)\n'+invForPrompt(cap)+'\n\n'+
   '## Días (usa la clave exacta como "fecha"; agrega AAAA-MM-DD@salir solo en noches que lo pidan)\n'+keys.map(function(f){return f+' ('+DN[wd(f)]+')'}).join('\n')+'\n\n'+
   'Responde SOLO con JSON:\n{"dias":[{"fecha":"AAAA-MM-DD o AAAA-MM-DD@salir","ocasion":"2 a 5 palabras","prendas":["id",...],"nota":"una sola frase: el volumen de la silueta y por qué funciona para ese día"}],"consejo":"1 o 2 frases: clima esperado y qué llevar además (lentes, bloqueador, chamarra…)"}';
 }
@@ -4566,9 +4566,9 @@ function invForPrompt(cap){
   return shuffle(items().filter(planUsable)).map(function(it){
     var e=eff(it),st=it.override?'sirve (mi razón: '+it.override.motivo+')':e==='cond'?'condición: '+it.cond:e==='no'?'no recomendada: '+it.cond:'sirve';
     var dp=cap[it.id]===Infinity?'∞':cap[it.id];
-    return it.id+' | '+it.name+(qty(it)>1?' ('+qty(it)+(isSock(it)?' pares':' piezas')+')':'')+' | '+TIPOS[it.tipo]+' · '+(it.corte||'')+' | '+fnTag(it)+' | '+(it.material||'')+' | '+st+' | disp: '+dp}).join('\n');
+    return it.id+' | '+it.name+(qty(it)>1?' ('+qty(it)+(isSock(it)?' pares':' piezas')+')':'')+' | '+TIPOS[it.tipo]+' · '+(it.corte||'')+' | '+fnTag(it)+' | '+(it.color||'')+' | '+(it.material||'')+' | '+st+(it.combina&&e!=='no'?' | combina: '+it.combina:'')+' | disp: '+dp}).join('\n');
 }
-var NOCOLOR='Su armario es de tonos neutros y estilo minimalista: NO calcules combinaciones de colores. Tu criterio se enfoca estrictamente en la proporción de las prendas y en la funcionalidad para los eventos del día. Si sus preferencias o la condición de una prenda solo hablan de colores, ignóralas; las condiciones funcionales (calor, horario, ocasión, comodidad, plantilla, talla) sí se respetan.\n\n';
+var CRITERIO='Su armario es de tonos neutros y estilo minimalista: no calcules combinaciones de colores por tu cuenta. Tu criterio se enfoca en la proporción de las prendas y en la funcionalidad para los eventos del día. Pero su opinión manda: respeta siempre sus preferencias y la condición de cada prenda, incluidas sus reglas de color (su paleta y con qué sí o no va cada prenda).\n\n';
 function rulesEstilista(trip){return '## Regla 1: motor de proporciones y siluetas (obligatoria)\n- La prioridad es la coherencia geométrica. El inventario trae el volumen de cada prenda: holgada, regular o recta, o ajustada.\n- Si eliges una parte alta holgada (boxy, oversize, loose o camisa relajada), emparéjala obligatoriamente con una parte baja de volumen similar: recta o holgada (loose-fit).\n- Nunca mezcles una parte alta muy holgada con una parte baja ajustada (slim), ni una parte alta ajustada con una parte baja holgada. Si lleva capa, la capa también cumple esta regla. Mantén la estética estructurada.\n\n'+
   '## Regla 2: filtro de contexto '+(trip?'y planes (léelos antes de elegir)':'y agenda (revisa los bloques de tiempo y el «tipo de día» antes de elegir las piezas)')+'\n- Obra o trabajo de campo (visita a obra, levantamiento, trabajo en sitio): descarta la ropa delicada y el calzado abierto (sandalias, chanclas, zuecos). Obligatorio, por seguridad: pantalón de trabajo (si no tiene, el más resistente, como la mezclilla) y botas.\n'+
   (trip?'':'- Escritorio o enfoque (modelado 3D, renderizado, universidad, clases o prácticas en interiores): prioriza siluetas que permitan comodidad durante muchas horas y calzado ergonómico (zuecos o tenis cómodos).\n- Si un evento que marcó cambia el plan del día, manda el evento.\n')+'\n'}
@@ -4580,14 +4580,14 @@ function genPrompt(keys,c,cap,instr){
   var keep=Object.keys(c.outfits||{}).sort().filter(function(k){return keys.indexOf(k)<0&&c.outfits[k].items&&c.outfits[k].items.length}).map(function(k){return keyLabel(k)+': '+c.outfits[k].items.map(function(id){var it=byId(id);return it?it.name:id}).join(', ')}).join('\n')||'(ninguno)';
   var fs=[];keys.forEach(function(k){var f=dateOf(k);if(fs.indexOf(f)<0)fs.push(f)});
   var evs=fs.map(function(f){return evsFor(c,f).map(function(e){return f+': '+e.texto}).join('\n')}).filter(Boolean).join('\n')||'(ninguno)';
-  return 'Eres el Estilista Personal integrado en Mi Día, la app de organización de '+quien(true)+'. Tu tarea es generar su «Outfit del Día» analizando su inventario de ropa limpia (usa SOLO esas prendas, citadas por id) y su agenda de cada día (la de su pestaña «Hoy»).\n'+NOCOLOR+
+  return 'Eres el Estilista Personal integrado en Mi Día, la app de organización de '+quien(true)+'. Tu tarea es generar su «Outfit del Día» analizando su inventario de ropa limpia (usa SOLO esas prendas, citadas por id) y su agenda de cada día (la de su pestaña «Hoy»).\n'+CRITERIO+
   rulesEstilista(false)+
   '## Sus preferencias y reglas\n'+(S.cfg.prefs||'(sin reglas)')+'\n\n'+semTxt(fs)+
   rulesUso()+
   rulesOutfit(false)+
   (instr?'## Indicaciones del usuario para estos outfits (obligatorias)\n'+instr+'\n\n':'')+
   gustosTxt()+'## Eventos que marcó\n'+evs+'\n\n## Outfits ya planeados que NO cambias (evita repetir sus combinaciones)\n'+keep+'\n\n'+
-  '## Inventario (id | prenda | tipo · corte | volumen y función | material | estado | disp)\n'+invForPrompt(cap)+'\n\n'+
+  '## Inventario (id | prenda | tipo · corte | volumen y función | color | material | estado | combina | disp)\n'+invForPrompt(cap)+'\n\n'+
   '## Outfits a planear (usa la clave exacta como "fecha")\n'+keys.map(function(k){return keyLabel(k)+' · tipo de día: '+modeTxt(k,c)}).join('\n')+'\n\n'+
   'Variante aleatoria #'+Math.floor(Math.random()*1e6)+': sé creativo y no elijas siempre lo mismo.\n\n'+
   'Responde SOLO con JSON, sin texto extra:\n{"dias":[{"fecha":"clave exacta, AAAA-MM-DD o AAAA-MM-DD@salir","ocasion":"para qué es, 2 a 5 palabras","prendas":["id","id","id"],"veredicto":"una sola frase: el volumen de la silueta y por qué es funcional para la agenda de ese día. Ej.: Silueta relajada en ambas mitades, pensada para la comodidad en el escritorio durante las horas de modelado"}]}';
@@ -4644,7 +4644,7 @@ function chatPrompt(c,w){
   var inv=items().filter(planUsable).map(function(it){return it.id+' | '+it.name+' | '+(it.corte||'')+' | '+(it.color||'')+(eff(it)==='no'?' | no recomendada':'')}).join('\n');
   return 'Eres el asistente de outfits de '+quien()+'. En este chat SOLO ayudas con la semana del '+ds[0]+' al '+ds[ds.length-1]+': él te cuenta eventos o días que piden un outfit específico, y te pide crear o cambiar outfits.\n'+
   'Hoy es '+today()+' ('+DN[wd(today())]+').\nFechas de la semana: '+ds.map(function(f){return DN[wd(f)]+' '+f}).join(', ')+'.\nCada día tiene su outfit (clave AAAA-MM-DD) y, si va a salir en la noche, uno aparte con clave AAAA-MM-DD@salir. Si dice que va a salir un día, usa "regenerar" con esa clave @salir (o "asignar" si dice qué se pondrá).\n'+
-  semTxt(ds)+'Sus reglas:\n'+(S.cfg.prefs||'(sin datos)')+'\n\nComo su estilista: nunca juntes una mitad holgada con la otra ajustada; en obra van botas y pantalón de trabajo (o el más resistente), sin nada delicado ni calzado abierto; en días de escritorio, comodidad y calzado ergonómico. No combines por colores: su armario es neutro.\n\n'+
+  semTxt(ds)+'Sus reglas:\n'+(S.cfg.prefs||'(sin datos)')+'\n\nComo su estilista: nunca juntes una mitad holgada con la otra ajustada; en obra van botas y pantalón de trabajo (o el más resistente), sin nada delicado ni calzado abierto; en días de escritorio, comodidad y calzado ergonómico. No calcules combinaciones de colores por tu cuenta, pero respeta sus reglas de color y la condición de cada prenda.\n\n'+
   'Eventos ya registrados: '+JSON.stringify(sm.eventos)+'\n\nOutfits actuales (clave: id prenda, ...):\n'+outs+'\n\nSu inventario (id | prenda | corte | color):\n'+inv+'\n\n'+
   'Responde SIEMPRE solo con JSON:\n{"respuesta":"texto breve en español, tono cercano y profesional","eventos":[{"fecha":"AAAA-MM-DD","texto":"evento y qué pide el outfit"}],"accion":"ninguna","fechas":[],"indicacion":"","asignaciones":[]}\n'+
   '- "eventos" es la lista COMPLETA y actualizada de la semana: conserva los anteriores salvo que pida quitarlos. Si da una instrucción para días concretos (por ejemplo «sin camisas en la F1»), guárdala también como evento de esos días.\n'+

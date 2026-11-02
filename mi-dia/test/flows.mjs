@@ -602,16 +602,16 @@ const estilo = (today, f) => {
   const sd = makeSeed(today);
   const it = (id, name, tipo, corte, material, x) => Object.assign({ id, name, tipo, corte, color: '', hex: '#8A8070', material, estado: 'sirve', cond: '', destino: '', combina: '', nota: '', maxUsos: tipo === 'alta' ? 1 : tipo === 'baja' ? 4 : 0, cantidad: 1, usos: 0, total: 0, ultimo: '', override: null }, x || {});
   sd['armario/inv'].items.push(
-    it('t2', 'Playera boxy negra', 'alta', 'Playera boxy', 'Algodón'),
-    it('t3', 'Playera oversize gris', 'alta', 'Playera oversize', 'Algodón'),
+    it('t2', 'Playera boxy negra', 'alta', 'Playera boxy', 'Algodón', { color: 'Negro' }),
+    it('t3', 'Playera oversize gris', 'alta', 'Playera oversize', 'Algodón', { color: 'Gris', combina: 'Pantalón relaxed arena' }),
     it('t4', 'Camisa de lino blanca', 'alta', 'Camisa manga larga', 'Lino'),
-    it('t5', 'Polo slim negro', 'alta', 'Polo slim', 'Piqué de algodón'),
+    it('t5', 'Polo slim negro', 'alta', 'Polo slim', 'Piqué de algodón', { color: 'Negro', estado: 'cond', cond: 'Solo con pantalón arena o negro' }),
     it('b1', 'Jeans slim negro', 'baja', 'Slim', 'Denim'),
     it('b2', 'Pantalón relaxed arena', 'baja', 'Relaxed', 'Algodón'),
     it('b3', 'Pantalón de lino', 'baja', 'Straight', 'Lino'),
-    it('b4', 'Jeans rectos azules', 'baja', 'Straight', 'Denim', { maxUsos: 6 }),
+    it('b4', 'Jeans rectos azules', 'baja', 'Straight', 'Denim', { color: 'Azul', maxUsos: 6 }),
     it('z1', 'Botas de seguridad', 'calzado', 'Bota', 'Piel'),
-    it('z2', 'Zuecos cafés', 'calzado', 'Clog', 'Ante'),
+    it('z2', 'Zuecos cafés', 'calzado', 'Clog', 'Ante', { color: 'Café' }),
     it('z3', 'Sandalias', 'calzado', 'Sandalia', 'Piel'),
     it('z4', 'Mocasines', 'calzado', 'Mocasín', 'Piel'),
     it('c1', 'Tines blancos', 'basico', 'Tines', 'Algodón', { maxUsos: 1, cantidad: 6 }),
@@ -682,10 +682,12 @@ await run('Estilista: día de escritorio (vie 30 oct 7:40)', { seed: estilo('202
   let o = await outfitOf(page, '2026-10-30');
   ok(['p5', 'z2'].includes(calzado(o.items)), 'cambia los mocasines por tenis o zuecos', o.items);
   const pr = await lastArmPrompt(page);
-  ok(/Eres el Estilista Personal/.test(pr) && /NO calcules combinaciones de colores/.test(pr) && /Regla 1: motor de proporciones/.test(pr) && /Regla 2: filtro de contexto y agenda/.test(pr), 'el prompt trae el rol y las dos reglas');
+  ok(/Eres el Estilista Personal/.test(pr) && /Regla 1: motor de proporciones/.test(pr) && /Regla 2: filtro de contexto y agenda/.test(pr), 'el prompt trae el rol y las dos reglas');
   ok(pr.includes('2026-10-30 (viernes) · tipo de día: escritorio o enfoque (las prácticas y las clases)'), 'le dice qué tipo de día es según la agenda', pr.split('## Outfits a planear')[1]);
-  ok(pr.includes('t2 | Playera boxy negra | Parte alta · Playera boxy | holgada | Algodón') && pr.includes('z2 | Zuecos cafés | Calzado · Clog | abierto · ergonómico · delicada') && pr.includes('b4 | Jeans rectos azules | Parte baja · Straight | recta · resistente'), 'cada prenda lleva su volumen y función');
-  ok(!/alterna colores|Combina dentro de su paleta|looks claros|que combinen entre sí/.test(pr), 'ya no le pide combinar colores');
+  ok(pr.includes('t2 | Playera boxy negra | Parte alta · Playera boxy | holgada | Negro | Algodón | sirve') && pr.includes('z2 | Zuecos cafés | Calzado · Clog | abierto · ergonómico · delicada | Café | Ante') && pr.includes('b4 | Jeans rectos azules | Parte baja · Straight | recta · resistente | Azul | Denim'), 'cada prenda lleva su volumen, función y color');
+  ok(/no calcules combinaciones de colores por tu cuenta/.test(pr) && /Pero su opinión manda: respeta siempre sus preferencias y la condición de cada prenda, incluidas sus reglas de color/.test(pr), 'sus reglas de color sí mandan');
+  ok(pr.includes('condición: Solo con pantalón arena o negro') && pr.includes('| combina: Pantalón relaxed arena') && pr.includes('Paleta cálida.'), 'la IA recibe sus condiciones, combinaciones y preferencias');
+  ok(!/alterna colores|Combina dentro de su paleta|looks claros|que combinen entre sí/.test(pr), 'no agrega reglas de color propias');
   await armIA(page, [{ fecha: '2026-10-30', ocasion: 'Prácticas y clases', prendas: ['t3', 'b4', 'z2', 'p6', 'p7', 'p8', 'p9'], veredicto: 'Silueta holgada arriba y recta abajo, pensada para las horas de escritorio.' }]);
   await page.click('[data-a="day-re"][data-f="2026-10-30"]'); await wait(page, 700);
   o = await outfitOf(page, '2026-10-30');
@@ -694,7 +696,7 @@ await run('Estilista: día de escritorio (vie 30 oct 7:40)', { seed: estilo('202
   await tab(page, 'armario');
   await page.click('[data-a="tab"][data-v="inv"]'); await wait(page);
   const inv = await armText(page, 'full');
-  ok(/Parte alta · Playera boxy · Algodón · silueta holgada/.test(inv) && /Parte baja · Slim · Denim · silueta ajustada/.test(inv), 'el inventario muestra la silueta de cada prenda');
+  ok(/Parte alta · Playera boxy · Negro · Algodón · silueta holgada/.test(inv) && /Parte baja · Slim · Denim · silueta ajustada/.test(inv), 'el inventario muestra la silueta de cada prenda');
 });
 
 await run('Estilista sin IA: el ciclo completo (vie 30 oct 7:40)', { noSample: true, seed: estilo('2026-10-30') }, async ({ page }) => {
