@@ -597,6 +597,118 @@ await run('Lo que sobró de octubre (dom 1 nov 9:00)', { time: '2026-11-01T09:00
   ok(!h1.includes('Ahorro para viajes') && h2.includes('Ahorro para viajes'), 'adivinar por nombre ya no manda compras a tu ahorro por la palabra «para»', { h1, h2 });
 });
 
+// --- estilista del armario: proporciones (Regla 1) y agenda de Hoy (Regla 2) ---
+const estilo = (today, f) => {
+  const sd = makeSeed(today);
+  const it = (id, name, tipo, corte, material, x) => Object.assign({ id, name, tipo, corte, color: '', hex: '#8A8070', material, estado: 'sirve', cond: '', destino: '', combina: '', nota: '', maxUsos: tipo === 'alta' ? 1 : tipo === 'baja' ? 4 : 0, cantidad: 1, usos: 0, total: 0, ultimo: '', override: null }, x || {});
+  sd['armario/inv'].items.push(
+    it('t2', 'Playera boxy negra', 'alta', 'Playera boxy', 'Algodón'),
+    it('t3', 'Playera oversize gris', 'alta', 'Playera oversize', 'Algodón'),
+    it('t4', 'Camisa de lino blanca', 'alta', 'Camisa manga larga', 'Lino'),
+    it('t5', 'Polo slim negro', 'alta', 'Polo slim', 'Piqué de algodón'),
+    it('b1', 'Jeans slim negro', 'baja', 'Slim', 'Denim'),
+    it('b2', 'Pantalón relaxed arena', 'baja', 'Relaxed', 'Algodón'),
+    it('b3', 'Pantalón de lino', 'baja', 'Straight', 'Lino'),
+    it('b4', 'Jeans rectos azules', 'baja', 'Straight', 'Denim', { maxUsos: 6 }),
+    it('z1', 'Botas de seguridad', 'calzado', 'Bota', 'Piel'),
+    it('z2', 'Zuecos cafés', 'calzado', 'Clog', 'Ante'),
+    it('z3', 'Sandalias', 'calzado', 'Sandalia', 'Piel'),
+    it('z4', 'Mocasines', 'calzado', 'Mocasín', 'Piel'),
+    it('c1', 'Tines blancos', 'basico', 'Tines', 'Algodón', { maxUsos: 1, cantidad: 6 }),
+  );
+  if (f) f(sd);
+  return sd;
+};
+// la IA simulada contesta estos outfits cuando el prompt es del estilista
+const armIA = (page, dias) => page.evaluate((dias) => { const prev = window.__sampleHandler; window.__sampleHandler = async (t) => (t.includes('Estilista Personal') ? { dias } : prev(t)); }, dias);
+const outfitOf = async (page, k) => ((await store(page, 'armario/plan')).cycle.outfits[k] || { items: [] });
+// el armario guarda 450 ms después del último cambio: hay que esperar a que llegue a la base
+const armText = (page, slot = 'hoy') => page.$eval(`#view [data-arm-slot="${slot}"]`, (h) => h.shadowRoot.querySelector('.app').innerText);
+const lastArmPrompt = (page) => page.evaluate(() => window.__sampleLog.filter((t) => t.includes('Estilista Personal')).slice(-1)[0] || '');
+const VOL = { p1: 3, t2: 3, t3: 3, p2: 1, p3: 1, t5: 1, t4: 2, p4: 2, b1: 1, b2: 3, b3: 2, b4: 2 };
+const parte = (ids, tipo) => ids.find((id) => (tipo === 'alta' ? /^(p1|p2|p3|t\d)$/ : /^(p4|b\d)$/).test(id));
+const calzado = (ids) => ids.find((id) => /^(p5|z\d)$/.test(id));
+
+await run('Estilista: veredicto y outfit del día (vie 30 oct 7:40)', {}, async ({ page }) => {
+  const t = await armText(page);
+  ok(/veredicto\s*Silueta holgada arriba y recta abajo, pensada para la comodidad en el escritorio durante las prácticas y las clases\./i.test(t), 'el veredicto explica el volumen y por qué sirve para la agenda de hoy', t.slice(0, 500));
+  ok(/el outfit\s*Superior\s+Playera boxy verde oliva\s*Inferior\s+Pantalón beige\s*Calzado\s+Tenis blancos/i.test(t), 'la lista dice superior, inferior y calzado', t.slice(0, 500));
+  ok(/Complementos: Anillo de plata, Pulsera café/.test(t), 'los accesorios van aparte');
+  ok(!/Fresco para el calor/.test(t), 'ya no muestra la nota vieja');
+});
+
+await run('Estilista: nunca holgado con ajustado (vie 30 oct 7:40)', { seed: estilo('2026-10-30') }, async ({ page }) => {
+  await armIA(page, [
+    { fecha: '2026-10-31', ocasion: 'Sábado', prendas: ['t2', 'b1', 'p5', 'p6', 'p7', 'p8', 'p9'], veredicto: 'Silueta holgada arriba y ajustada abajo.' },
+    { fecha: '2026-11-01', ocasion: 'Domingo', prendas: ['t5', 'b2', 'p5', 'p6', 'p7', 'p8', 'p9'], veredicto: 'Silueta ajustada arriba y holgada abajo.' },
+  ]);
+  await tab(page, 'armario');
+  await page.click('[data-a="day-re"][data-f="2026-10-31"]'); await wait(page, 700);
+  await page.click('[data-a="day-re"][data-f="2026-11-01"]'); await wait(page, 700);
+  const sab = await outfitOf(page, '2026-10-31'), dom = await outfitOf(page, '2026-11-01');
+  const lo1 = parte(sab.items, 'baja'), lo2 = parte(dom.items, 'baja');
+  ok(sab.items.includes('t2') && lo1 && VOL[lo1] >= 2, 'playera boxy: cambia el jeans slim por un pantalón recto u holgado', sab.items);
+  ok(dom.items.includes('t5') && lo2 && VOL[lo2] <= 2, 'polo slim: cambia el pantalón relaxed por uno recto o ajustado', dom.items);
+  ok(!sab.veredicto && !dom.veredicto, 'no guarda el veredicto de la IA si ya no aplica', [sab.veredicto, dom.veredicto]);
+  const t = await armText(page, 'full');
+  ok(/(Silueta holgada arriba y (recta|holgada) abajo|Silueta relajada en ambas mitades), cómoda para un día libre y sin horario fijo\./.test(t), 'el veredicto describe la silueta corregida', t.slice(0, 600));
+  ok(!/rompe el balance/.test(t), 'ningún outfit rompe la proporción');
+});
+
+await run('Estilista: visita a obra (vie 30 oct 7:40)', { seed: estilo('2026-10-30', (sd) => { sd['armario/plan'].cycle.semanas[0].eventos = [{ fecha: '2026-10-30', texto: 'Visita a obra en Caucel' }]; }) }, async ({ page }) => {
+  await armIA(page, [{ fecha: '2026-10-30', ocasion: 'Obra', prendas: ['t4', 'b3', 'z3', 'p6', 'c1', 'p8', 'p9'], veredicto: 'Lino fresco con sandalias.' }]);
+  await page.click('[data-a="day-re"][data-f="2026-10-30"]'); await wait(page, 700);
+  const pr = await lastArmPrompt(page);
+  ok(pr.includes('2026-10-30 (viernes) · tipo de día: obra o trabajo de campo'), 'le dice a la IA que es día de obra', pr.split('## Outfits a planear')[1]);
+  let o = await outfitOf(page, '2026-10-30');
+  ok(o.items.includes('z1') && !o.items.includes('z3'), 'pone las botas y quita las sandalias', o.items);
+  ok(['b1', 'b4'].includes(parte(o.items, 'baja')), 'cambia el lino por el pantalón más resistente (mezclilla)', o.items);
+  ok(!o.items.includes('t4') && !!parte(o.items, 'alta'), 'quita la camisa de lino', o.items);
+  ok(o.items.includes('p7') && !o.items.includes('c1'), 'con botas, calcetines largos', o.items);
+  ok(/con pantalón resistente y botas para moverte con seguridad en la obra\./.test(await armText(page)), 'el veredicto lo explica');
+  await page.evaluate(() => { window.__sampleFail = 'error'; });
+  let todo = true;
+  for (let n = 0; n < 4; n++) {
+    await page.click('[data-a="day-re"][data-f="2026-10-30"]'); await wait(page, 700);
+    o = await outfitOf(page, '2026-10-30');
+    if (!(o.items.includes('z1') && ['b1', 'b4'].includes(parte(o.items, 'baja')) && !o.items.includes('t4') && !o.items.includes('c1'))) { todo = false; console.log('    sin IA:', o.items); }
+  }
+  ok(todo, 'sin IA también: botas, mezclilla y nada delicado');
+});
+
+await run('Estilista: día de escritorio (vie 30 oct 7:40)', { seed: estilo('2026-10-30') }, async ({ page }) => {
+  await armIA(page, [{ fecha: '2026-10-30', ocasion: 'Prácticas y clases', prendas: ['t3', 'b4', 'z4', 'p6', 'p7', 'p8', 'p9'], veredicto: 'Silueta holgada arriba y recta abajo, pensada para el escritorio.' }]);
+  await page.click('[data-a="day-re"][data-f="2026-10-30"]'); await wait(page, 700);
+  let o = await outfitOf(page, '2026-10-30');
+  ok(['p5', 'z2'].includes(calzado(o.items)), 'cambia los mocasines por tenis o zuecos', o.items);
+  const pr = await lastArmPrompt(page);
+  ok(/Eres el Estilista Personal/.test(pr) && /NO calcules combinaciones de colores/.test(pr) && /Regla 1: motor de proporciones/.test(pr) && /Regla 2: filtro de contexto y agenda/.test(pr), 'el prompt trae el rol y las dos reglas');
+  ok(pr.includes('2026-10-30 (viernes) · tipo de día: escritorio o enfoque (las prácticas y las clases)'), 'le dice qué tipo de día es según la agenda', pr.split('## Outfits a planear')[1]);
+  ok(pr.includes('t2 | Playera boxy negra | Parte alta · Playera boxy | holgada | Algodón') && pr.includes('z2 | Zuecos cafés | Calzado · Clog | abierto · ergonómico · delicada') && pr.includes('b4 | Jeans rectos azules | Parte baja · Straight | recta · resistente'), 'cada prenda lleva su volumen y función');
+  ok(!/alterna colores|Combina dentro de su paleta|looks claros|que combinen entre sí/.test(pr), 'ya no le pide combinar colores');
+  await armIA(page, [{ fecha: '2026-10-30', ocasion: 'Prácticas y clases', prendas: ['t3', 'b4', 'z2', 'p6', 'p7', 'p8', 'p9'], veredicto: 'Silueta holgada arriba y recta abajo, pensada para las horas de escritorio.' }]);
+  await page.click('[data-a="day-re"][data-f="2026-10-30"]'); await wait(page, 700);
+  o = await outfitOf(page, '2026-10-30');
+  ok(o.veredicto === 'Silueta holgada arriba y recta abajo, pensada para las horas de escritorio.' && calzado(o.items) === 'z2', 'si cumple las reglas, guarda el outfit y el veredicto de la IA', o);
+  ok(/Silueta holgada arriba y recta abajo, pensada para las horas de escritorio\./.test(await armText(page)), 'Hoy muestra ese veredicto');
+  await tab(page, 'armario');
+  await page.click('[data-a="tab"][data-v="inv"]'); await wait(page);
+  const inv = await armText(page, 'full');
+  ok(/Parte alta · Playera boxy · Algodón · silueta holgada/.test(inv) && /Parte baja · Slim · Denim · silueta ajustada/.test(inv), 'el inventario muestra la silueta de cada prenda');
+});
+
+await run('Estilista sin IA: el ciclo completo (vie 30 oct 7:40)', { noSample: true, seed: estilo('2026-10-30') }, async ({ page }) => {
+  await tab(page, 'armario');
+  for (let n = 0; n < 3; n++) {
+    await page.click('[data-a="gen"][data-v="local"]'); await wait(page, 700);
+    const outs = Object.entries((await store(page, 'armario/plan')).cycle.outfits).filter(([, o]) => !o.hecho);
+    const mal = outs.filter(([, o]) => { const a = parte(o.items, 'alta'), b = parte(o.items, 'baja'); return a && b && Math.abs(VOL[a] - VOL[b]) >= 2; });
+    const pies = outs.filter(([k]) => { const d = new Date(k + 'T12:00:00').getDay(); return d >= 1 && d <= 5; }).filter(([, o]) => !['p5', 'z2'].includes(calzado(o.items)));
+    ok(outs.length >= 10 && !mal.length, `vuelta ${n + 1}: ningún outfit junta holgado con ajustado`, mal);
+    ok(!pies.length, `vuelta ${n + 1}: entre semana (escritorio) siempre tenis o zuecos`, pies);
+  }
+});
+
 await run('Sin base de datos', { noDb: true }, async ({ page }) => {
   ok(/Abre esta app desde Claude/.test(await page.$eval('#view', (e) => e.innerText)), 'avisa que hay que abrirla desde Claude');
 });
