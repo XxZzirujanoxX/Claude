@@ -1340,7 +1340,7 @@ function recapCard(t){
   if(Number(t.slice(8))>3||!S.cfgReady||!S.diasReady)return '';
   const pym=prevYm(t.slice(0,7)),tx=S.meses[pym];
   if(!Array.isArray(tx)||!tx.some(x=>x.t==='gasto')||lsGet('midia:recap','')===pym)return '';
-  const c=pcfg(pym),bl=budgetLeft(pym,tx),ri=restoInfo(pym,tx),{recvTotal}=sums(tx),spentTotal=bl.spent,mn=MONTHS[Number(pym.slice(5))-1].toLowerCase(),pts=[];
+  const c=pcfg(pym),bl=budgetLeft(pym,tx),ri=restoInfo(pym,tx),{recvTotal}=sums(tx),spentTotal=ri?bl.spentNoR:bl.spent,mn=MONTHS[Number(pym.slice(5))-1].toLowerCase(),pts=[];
   /* con «lo que sobra», el mes se mide contra lo que entró; sin ella, contra tu presupuesto */
   const budget=ri?recvTotal:bl.budget,left=ri?ri.target:bl.left;
   const top=Object.entries(varSpend(tx)).map(([k,v])=>[c.cats.find(x=>x.id===k),v]).filter(([x,v])=>x&&v>0).sort((a,b)=>b[1]-a[1])[0];
@@ -1761,7 +1761,7 @@ function hoyDinero(t){
     const bl=budgetLeft(ym,tx),left=bl.left;
     const hoy=tx.filter(x=>x.t==='gasto'&&x.d===t&&!(bl.r&&x.cat===bl.r.id)).reduce((s,x)=>s+x.amt,0);
     const f=forecast(ym,tx),mn=MONTHS[new Date().getMonth()].toLowerCase(),tp=topesSemana(mondayOf(t));
-    body=`<p class="lead" style="font-size:1.4rem;margin:0 0 4px">${left>=0?`Te quedan <b>${money(left)}</b> ${bl.r?'para gastar ':''}este mes`:`Te pasaste por <b style="color:var(--late)">${money(-left)}</b>`}</p>`
+    body=`<p class="lead" style="font-size:1.4rem;margin:0 0 4px">${left>=0?`Te quedan <b>${money(left)}</b> este mes`:`Te pasaste por <b style="color:var(--late)">${money(-left)}</b>`}</p>`
       +`<p class="muted small" style="margin:0">${hoy?'Hoy llevas '+money(hoy)+' en gastos.':'Hoy no has registrado gastos.'} ${fcText(f,mn,false)}</p>`
       +tp.map(g=>`<div class="rw" style="--cat:${g.lost?'var(--late)':(g.warn?'var(--soon)':'var(--ok)')};margin-top:12px"><div class="top"><span>${esc(g.catName)} esta semana</span><span>${money(g.sp)} de ${money(g.max)}</span></div><div class="bar8"><i style="width:${Math.min(100,Math.round(g.sp/g.max*100))}%"></i></div></div>`).join('')
       +`<div class="btnrow"><button class="secondary" type="button" data-act="movOpen">Registrar gasto</button></div>`;
@@ -2254,8 +2254,8 @@ function effCfg(c,y){const income=c.income.map(i=>weeklyFor(i,y)),wk=c.cats.map(
   return {income,cats};}
 const pcfg=ym=>effCfg(rawCfg(),ym||S.din.ym);
 const restoOf=c=>(c||pcfg()).cats.find(x=>x.resto)||null;
-/* «te quedan»: tu presupuesto sin la categoría de lo que sobra (eso no se gasta, se aparta) */
-function budgetLeft(ym,tx){const c=pcfg(ym),r=restoOf(c),{spent,spentTotal}=sums(tx),budget=sumAmt(c.cats)-(r?Number(r.amt)||0:0),sp=spentTotal-(r?spent[r.id]||0:0);return {budget,spent:sp,left:budget-sp,r};}
+/* «te quedan»: todo tu presupuesto, ahorro incluido (cuadra con tus ingresos); spentNoR: lo gastado sin lo que apartaste de lo que sobra */
+function budgetLeft(ym,tx){const c=pcfg(ym),r=restoOf(c),{spent,spentTotal}=sums(tx),budget=sumAmt(c.cats);return {budget,spent:spentTotal,left:budget-spentTotal,spentNoR:spentTotal-(r?spent[r.id]||0:0),r};}
 /* lo que sobra del mes: en el mes actual, el pronóstico; en uno pasado, lo que de verdad quedó (entró − gastaste − lo que faltó pagar) */
 function restoInfo(ym,tx){
   const c=pcfg(ym),r=restoOf(c);if(!r||!Array.isArray(tx))return null;
@@ -2294,12 +2294,12 @@ function vDin(){
   let h=header('Dinero','');
   h+=`<div class="monthnav"><button class="ib" type="button" data-act="month" data-dir="-1" aria-label="Mes anterior">‹</button><strong>${MONTHS[m-1]} ${y}</strong><button class="ib" type="button" data-act="month" data-dir="1" aria-label="Mes siguiente">›</button></div>`;
   if(!S.cfgReady||tx===undefined)return h+loading();
-  const c=pcfg(),bl=budgetLeft(ym,tx),budget=bl.budget,left=bl.left,isR=x=>!!bl.r&&x.id===bl.r.id,{spent,recvTotal}=sums(tx);
+  const c=pcfg(),bl=budgetLeft(ym,tx),budget=bl.budget,left=bl.left,{spent,recvTotal}=sums(tx);
   if(!c.cats.length)h+='<p class="lead">Arma tu presupuesto para empezar.</p>';
   else{
-    h+=`<p class="lead${left<0?' over':''}">${left>=0?`Te quedan <b class="num">${money(left)}</b> de ${money(budget)}${bl.r?' para gastar':''}`:`Te pasaste por <b class="num">${money(-left)}</b> este mes`}</p>`;
+    h+=`<p class="lead${left<0?' over':''}">${left>=0?`Te quedan <b class="num">${money(left)}</b> de ${money(budget)}`:`Te pasaste por <b class="num">${money(-left)}</b> este mes`}</p>`;
     const den=Math.max(budget,bl.spent)||1;let segs='',leg='';
-    GROUPS.forEach(g=>{const l=c.cats.filter(x=>x.g===g.id&&!isR(x)),gs=l.reduce((s,x)=>s+(spent[x.id]||0),0);
+    GROUPS.forEach(g=>{const l=c.cats.filter(x=>x.g===g.id),gs=l.reduce((s,x)=>s+(spent[x.id]||0),0);
       if(gs>0)segs+=`<i style="width:${(gs/den*100).toFixed(2)}%;background:${g.c}"></i>`;
       if(l.length)leg+=`<span class="num" style="--c:${g.c}">${esc(g.name)} ${money(gs)}</span>`;});
     const orphan=Object.keys(spent).filter(id=>!catById(id)).reduce((s,id)=>s+spent[id],0);

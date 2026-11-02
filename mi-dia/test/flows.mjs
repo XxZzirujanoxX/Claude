@@ -503,8 +503,8 @@ const pesos = (n) => '$' + Number(n).toLocaleString('en-US');
 await run('Lo que sobra va a viajes (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00', seed: viajes('2026-10-30') }, async ({ page }) => {
   await tab(page, 'dinero'); await wait(page, 300);
   const v = await page.$eval('#view', (e) => e.innerText);
-  const quedan = (v.match(/Te quedan \$([\d,]+) de \$19,133 para gastar/) || [])[1];
-  ok(!!quedan, 'lo que te queda no cuenta tu ahorro (19,133 = todo menos lo que sobra)', v.match(/Te (quedan|pasaste)[^\n]*/)?.[0]);
+  const quedan = (v.match(/Te quedan \$([\d,]+) de \$26,200\n/) || [])[1];
+  ok(!!quedan, 'el total es todo tu presupuesto, ahorro incluido (= tus ingresos)', v.match(/Te (quedan|pasaste)[^\n]*/)?.[0]);
   const hl = (v.match(/Ahorro para viajes: a este ritmo van \$([\d,]+)/) || [])[1];
   const fl = (v.match(/A este ritmo van \$([\d,]+) a Ahorro para viajes este mes/) || [])[1];
   ok(!!hl && hl === fl, 'el encabezado y el pronóstico dicen lo mismo', { hl, fl });
@@ -522,7 +522,8 @@ await run('Lo que sobra va a viajes (vie 30 oct 13:00)', { time: '2026-10-30T13:
   let tx = await txOf(page, '2026-10'); const t = tx[tx.length - 1];
   ok(tx.length === before + 1 && t.cat === 'ahorro' && t.d === '2026-10-30' && t.amt === 7067, 'Apartar guarda tu plan de ahorro', t);
   const v2 = await page.$eval('#view', (e) => e.innerText);
-  ok(/Ahorro para viajes[\s\S]{0,120}Apartado/.test(v2) && new RegExp('Te quedan \\$' + quedan + ' de \\$19,133').test(v2) && /ya apartaste \$/.test(v2), 'queda apartado sin mover lo que te queda para gastar');
+  const quedan2 = Number(((v2.match(/Te quedan \$([\d,]+) de \$26,200/) || [])[1] || '').replace(/,/g, ''));
+  ok(/Ahorro para viajes[\s\S]{0,120}Apartado/.test(v2) && quedan2 === Number(quedan.replace(/,/g, '')) - 7067 && /ya apartaste \$/.test(v2), 'queda apartado y se descuenta de lo que te queda', { quedan, quedan2 });
   await tab(page, 'hoy'); await wait(page, 300);
   const hoy = await page.$eval('#view', (e) => e.innerText);
   ok(new RegExp('A este ritmo van \\$' + hl + ' a Ahorro para viajes').test(hoy), 'Hoy dice cuánto va a tu ahorro', hoy.match(/A este ritmo[^\n]*/)?.[0]);
