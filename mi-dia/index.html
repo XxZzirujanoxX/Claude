@@ -1761,7 +1761,7 @@ function hoyDinero(t){
     const bl=budgetLeft(ym,tx),left=bl.left;
     const hoy=tx.filter(x=>x.t==='gasto'&&x.d===t&&!(bl.r&&x.cat===bl.r.id)).reduce((s,x)=>s+x.amt,0);
     const f=forecast(ym,tx),mn=MONTHS[new Date().getMonth()].toLowerCase(),tp=topesSemana(mondayOf(t));
-    body=`<p class="lead" style="font-size:1.4rem;margin:0 0 4px">${left>=0?`Te quedan <b>${money(left)}</b> este mes`:`Te pasaste por <b style="color:var(--late)">${money(-left)}</b>`}</p>`
+    body=`<p class="lead" style="font-size:1.4rem;margin:0 0 4px">${left>=0?`Te quedan <b>${money(left)}</b> ${bl.r?'para gastar ':''}este mes`:`Te pasaste por <b style="color:var(--late)">${money(-left)}</b>`}</p>`
       +`<p class="muted small" style="margin:0">${hoy?'Hoy llevas '+money(hoy)+' en gastos.':'Hoy no has registrado gastos.'} ${fcText(f,mn,false)}</p>`
       +tp.map(g=>`<div class="rw" style="--cat:${g.lost?'var(--late)':(g.warn?'var(--soon)':'var(--ok)')};margin-top:12px"><div class="top"><span>${esc(g.catName)} esta semana</span><span>${money(g.sp)} de ${money(g.max)}</span></div><div class="bar8"><i style="width:${Math.min(100,Math.round(g.sp/g.max*100))}%"></i></div></div>`).join('')
       +`<div class="btnrow"><button class="secondary" type="button" data-act="movOpen">Registrar gasto</button></div>`;
@@ -2259,11 +2259,13 @@ function budgetLeft(ym,tx){const c=pcfg(ym),r=restoOf(c),{spent,spentTotal}=sums
 /* lo que sobra del mes: en el mes actual, el pronóstico; en uno pasado, lo que de verdad quedó (entró − gastaste − lo que faltó pagar) */
 function restoInfo(ym,tx){
   const c=pcfg(ym),r=restoOf(c);if(!r||!Array.isArray(tx))return null;
-  const {spent,spentTotal,recvTotal}=sums(tx),ap=spent[r.id]||0,cur=ymOf(new Date()),plan=Number(r.amt)||0;let target=plan;
-  if(ym===cur)target=Math.round(forecast(ym,tx).end); // pronóstico: en pesos cerrados
-  else if(ym<cur){const owed=c.cats.filter(x=>x.g==='fijos'||x.g==='subs').reduce((s,x)=>s+Math.max(0,(Number(x.amt)||0)-(spent[x.id]||0)),0);target=recvTotal-(spentTotal-ap)-owed;}
-  target=Math.round(target*100)/100;
-  return {r,ap,plan,target,falta:Math.max(0,Math.round((target-ap)*100)/100),cur:ym===cur,past:ym<cur};
+  const {spent,spentTotal,recvTotal}=sums(tx),ap=spent[r.id]||0,cur=ymOf(new Date()),plan=Number(r.amt)||0,isCur=ym===cur,past=ym<cur;
+  let proj=null,real=null;
+  if(isCur)proj=Math.round(forecast(ym,tx).end); // pronóstico, en pesos cerrados
+  else if(past){const owed=c.cats.filter(x=>x.g==='fijos'||x.g==='subs').reduce((s,x)=>s+Math.max(0,(Number(x.amt)||0)-(spent[x.id]||0)),0);real=Math.round((recvTotal-(spentTotal-ap)-owed)*100)/100;}
+  /* target: lo que va a sobrar (o lo que sobró). Lo que toca apartar: tu plan en el mes en curso; en un mes cerrado, lo que de verdad sobró */
+  const target=past?real:(isCur?proj:plan),goal=past?Math.max(0,real):plan;
+  return {r,ap,plan,proj,real,target,falta:Math.max(0,Math.round((goal-ap)*100)/100),cur:isCur,past};
 }
 function restoLine(ri){const n=esc(ri.r.name),v=money(Math.max(0,ri.target)),a=ri.ap?' · '+(ri.past?'apartaste ':'ya apartaste ')+money(ri.ap):'';
   return ri.cur?`${n}: a este ritmo van ${v}${a}`:(ri.past?`${n}: te sobraron ${v}${a}`:`${n}: lo que sobre (tu plan: ${money(ri.plan)})`);}
@@ -2295,7 +2297,7 @@ function vDin(){
   const c=pcfg(),bl=budgetLeft(ym,tx),budget=bl.budget,left=bl.left,isR=x=>!!bl.r&&x.id===bl.r.id,{spent,recvTotal}=sums(tx);
   if(!c.cats.length)h+='<p class="lead">Arma tu presupuesto para empezar.</p>';
   else{
-    h+=`<p class="lead${left<0?' over':''}">${left>=0?`Te quedan <b class="num">${money(left)}</b> de ${money(budget)}`:`Te pasaste por <b class="num">${money(-left)}</b> este mes`}</p>`;
+    h+=`<p class="lead${left<0?' over':''}">${left>=0?`Te quedan <b class="num">${money(left)}</b> de ${money(budget)}${bl.r?' para gastar':''}`:`Te pasaste por <b class="num">${money(-left)}</b> este mes`}</p>`;
     const den=Math.max(budget,bl.spent)||1;let segs='',leg='';
     GROUPS.forEach(g=>{const l=c.cats.filter(x=>x.g===g.id&&!isR(x)),gs=l.reduce((s,x)=>s+(spent[x.id]||0),0);
       if(gs>0)segs+=`<i style="width:${(gs/den*100).toFixed(2)}%;background:${g.c}"></i>`;
@@ -2324,14 +2326,16 @@ function catsView(tx){
     h+='</section>';
   }
   GROUPS.forEach(g=>{
-    const list=c.cats.filter(x=>x.g===g.id).map(x=>ri&&x.id===ri.r.id?Object.assign({},x,{amt:Math.max(0,ri.target),_r:1}):x);if(!list.length)return;
+    const list=c.cats.filter(x=>x.g===g.id).map(x=>ri&&x.id===ri.r.id?Object.assign({},x,{_r:1}):x);if(!list.length)return;
     const gb=sumAmt(list),gs=list.reduce((s,x)=>s+(spent[x.id]||0),0);
     h+=`<section class="bg" style="--c:${g.c}"><div class="bgh"><h2>${esc(g.name)}</h2><span class="num">${money(gs)} de ${money(gb)}</span></div>`;
-    list.forEach(x=>{const s=spent[x.id]||0,rest=x.amt-s,p=x.amt?Math.min(100,s/x.amt*100):(s>0?100:0),over=rest<0,save=g.id==='ahorro';
-      let bot;if(over)bot=`<span class="overtxt">${x._r?`Apartaste ${money(-rest)} más de lo que ${ri.past?'sobró':'va a sobrar'}`:`Te pasaste por ${money(-rest)}`}</span>`;
-      else if(rest===0&&(x.amt>0||x._r&&s>0))bot=`<span class="donetxt">${save?'Apartado':'Pagado'}</span>`;
+    list.forEach(x=>{const s=spent[x.id]||0,rest=x.amt-s,p=x.amt?Math.min(100,s/x.amt*100):(s>0?100:0),over=rest<0&&!x._r,save=g.id==='ahorro';
+      let bot;
+      if(x._r)bot=ri.falta>0?`<span>Por apartar ${money(ri.falta)}</span>`+(x.quick?`<button class="pill" type="button" data-act="quick" data-kind="gasto" data-id="${esc(x.id)}">Apartar</button>`:''):(s>0?'<span class="donetxt">Apartado</span>':`<span>${ri.past?'No sobró nada':'Nada por apartar'}</span>`);
+      else if(over)bot=`<span class="overtxt">Te pasaste por ${money(-rest)}</span>`;
+      else if(rest===0&&x.amt>0)bot=`<span class="donetxt">${save?'Apartado':'Pagado'}</span>`;
       else bot=`<span>${save?'Por apartar':'Te quedan'} ${money(rest)}</span>`+(x.quick&&rest>0?`<button class="pill" type="button" data-act="quick" data-kind="gasto" data-id="${esc(x.id)}">${save?'Apartar':'Marcar pagado'}</button>`:'');
-      const nt=[x._r?(ri.past?'Lo que sobró después de todo lo demás':'Lo que sobra después de todo lo demás')+(ri.cur?' · tu plan: '+money(ri.plan):''):'',x.note||'',(tp=>tp?'Tope semanal: llevas '+money(tp.sp)+' de '+money(tp.max):'')(tps.find(g=>g.cat===x.id))].filter(Boolean).join(' · ');
+      const nt=[x._r?(ri.cur?'Lo que sobra después de todo lo demás · a este ritmo: '+money(Math.max(0,ri.proj)):(ri.past?'Lo que sobró: '+money(Math.max(0,ri.real)):'Lo que sobre después de todo lo demás')):'',x.note||'',(tp=>tp?'Tope semanal: llevas '+money(tp.sp)+' de '+money(tp.max):'')(tps.find(g=>g.cat===x.id))].filter(Boolean).join(' · ');
       h+=`<div class="brow"><div class="top"><span class="nm">${esc(x.name)}</span><span class="v">${money(s)} <span class="of">/ ${money(x.amt)}</span></span></div>${nt?`<div class="bnote">${esc(nt)}</div>`:''}<div class="bbar"><i style="width:${p}%;background:${over?'var(--late)':g.c}"></i></div><div class="bbot">${bot}</div></div>`;});
     h+='</section>';
   });
@@ -2565,9 +2569,14 @@ function varSpend(tx,maxDay){const r={};(tx||[]).forEach(t=>{if(t.t!=='gasto'||!
 function forecast(ym,tx){
   const c=pcfg(ym),r=restoOf(c),{spent,recv}=sums(tx),day=new Date().getDate(),dim=daysIn(ym),frac=day/dim,done=(day-1)/dim;
   let fixed=0,varBud=0;c.cats.forEach(x=>{const a=Number(x.amt)||0;if(x.g==='var')varBud+=a;else if(!r||x.id!==r.id)fixed+=Math.max(spent[x.id]||0,a);});
-  const vs=varSpend(tx),varNow=Object.values(vs).reduce((a,b)=>a+b,0),w=Math.min(1,(day-1)/13);
-  // al inicio del mes pesa más tu presupuesto (y el día de hoy aún no termina); conforme avanza, tu ritmo real
-  const varProj=Math.max(varNow,w*(varNow/frac)+(1-w)*(varNow+varBud*(1-done)));
+  const vs=varSpend(tx),varNow=Object.values(vs).reduce((a,b)=>a+b,0),w=Math.min(1,(day-1)/13),pace=varNow/frac,base=varNow+varBud*(1-done);
+  /* gastos variables al cierre del mes. Si vas por debajo, eso no se cuenta como sobrante sino poco a poco en la segunda mitad
+     del mes (el súper, la gasolina y las salidas llegan en montones). Si ya te pasaste, o tu ritmo va arriba del presupuesto,
+     cuenta desde el principio. */
+  const u=Math.min(1,Math.max(0,(done-.5)/.4));
+  let varProj=base<varBud?varBud-u*(varBud-base):base;
+  if(pace>varBud)varProj=Math.max(varProj,varBud+w*(pace-varBud));
+  varProj=Math.max(varNow,varProj);
   const incProj=c.income.reduce((s,i)=>s+Math.max(recv[i.id]||0,Number(i.amt)||0),0)+Object.keys(recv).filter(k=>!incById(k)).reduce((s,k)=>s+recv[k],0);
   return {day,dim,frac,varNow,varProj,varBud,end:incProj-fixed-varProj,vs,r};
 }

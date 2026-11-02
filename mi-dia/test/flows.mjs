@@ -503,7 +503,7 @@ const pesos = (n) => '$' + Number(n).toLocaleString('en-US');
 await run('Lo que sobra va a viajes (vie 30 oct 13:00)', { time: '2026-10-30T13:00:00-06:00', seed: viajes('2026-10-30') }, async ({ page }) => {
   await tab(page, 'dinero'); await wait(page, 300);
   const v = await page.$eval('#view', (e) => e.innerText);
-  const quedan = (v.match(/Te quedan \$([\d,]+) de \$19,133/) || [])[1];
+  const quedan = (v.match(/Te quedan \$([\d,]+) de \$19,133 para gastar/) || [])[1];
   ok(!!quedan, 'lo que te queda no cuenta tu ahorro (19,133 = todo menos lo que sobra)', v.match(/Te (quedan|pasaste)[^\n]*/)?.[0]);
   const hl = (v.match(/Ahorro para viajes: a este ritmo van \$([\d,]+)/) || [])[1];
   const fl = (v.match(/A este ritmo van \$([\d,]+) a Ahorro para viajes este mes/) || [])[1];
@@ -513,12 +513,14 @@ await run('Lo que sobra va a viajes (vie 30 oct 13:00)', { time: '2026-10-30T13:
   ok(/Ahorro para viajes: tu plan \$7,067/.test(v), 'muestra el plan: ingresos menos todo lo demás');
   await page.click('[data-act="dsub"][data-sub="cats"]'); await wait(page, 200);
   const cv = await page.$eval('#view', (e) => e.innerText);
-  ok(new RegExp('Ahorro para viajes[\\s\\S]{0,20}\\$0 / \\$' + hl + '[\\s\\S]{0,10}Lo que sobra después de todo lo demás · tu plan: \\$7,067').test(cv), 'en Categorías se mide contra lo que va a sobrar', cv.slice(cv.indexOf('Ahorro y colchón'), cv.indexOf('Ahorro y colchón') + 200));
+  ok(new RegExp('Ahorro para viajes[\\s\\S]{0,20}\\$0 / \\$7,067[\\s\\S]{0,10}Lo que sobra después de todo lo demás · a este ritmo: \\$' + hl + '[\\s\\S]{0,10}Por apartar \\$7,067').test(cv), 'en Categorías el ahorro se mide contra su plan y dice cuánto va a sobrar', cv.slice(cv.indexOf('Ahorro y colchón'), cv.indexOf('Ahorro y colchón') + 200));
+  const grp = [...cv.matchAll(/\n\$[\d,]+ de \$([\d,]+)\n/g)].map((m) => Number(m[1].replace(/,/g, '')));
+  ok(grp.length === 5 && grp.slice(1).reduce((a, b) => a + b, 0) === grp[0], 'los grupos suman lo mismo que tus ingresos', grp);
   ok(/Ocio[\s\S]{0,40}Tope semanal: llevas \$[\d,]+ de \$750/.test(cv) && /Comidas en prácticas[\s\S]{0,60}Tope semanal: llevas \$210 de \$500/.test(cv), 'el tope que vale esta semana aparece en su categoría (la meta de la semana manda)');
   const before = (await txOf(page, '2026-10')).length;
   await page.click('[data-act="quick"][data-id="ahorro"]'); await wait(page, 300);
   let tx = await txOf(page, '2026-10'); const t = tx[tx.length - 1];
-  ok(tx.length === before + 1 && t.cat === 'ahorro' && t.d === '2026-10-30' && t.amt === end, 'Apartar guarda justo lo que va a sobrar', t);
+  ok(tx.length === before + 1 && t.cat === 'ahorro' && t.d === '2026-10-30' && t.amt === 7067, 'Apartar guarda tu plan de ahorro', t);
   const v2 = await page.$eval('#view', (e) => e.innerText);
   ok(/Ahorro para viajes[\s\S]{0,120}Apartado/.test(v2) && new RegExp('Te quedan \\$' + quedan + ' de \\$19,133').test(v2) && /ya apartaste \$/.test(v2), 'queda apartado sin mover lo que te queda para gastar');
   await tab(page, 'hoy'); await wait(page, 300);
@@ -562,6 +564,17 @@ await run('Ingreso sin monto fijo (vie 30 oct 13:00)', { time: '2026-10-30T13:00
   ok(t.t === 'ingreso' && t.cat === 'outlier' && t.amt === 350, 'se guarda como ingreso de Outlier', t);
   const after = Number(((await page.$eval('#view', (e) => e.innerText)).match(/a este ritmo van \$([\d,]+)/) || [])[1]?.replace(/,/g, ''));
   ok(after === before + 350, 'lo que llega se suma a tu ahorro', { before, after });
+});
+await run('Ahorro al día 2 (lun 2 nov 10:00)', { time: '2026-11-02T10:00:00-06:00', seed: (() => { const sd = viajes('2026-11-02'); sd['meses/2026-11'] = { tx: [
+  { id: 'a', t: 'ingreso', cat: 'papa', amt: 20000, note: '', d: '2026-11-01' }, { id: 'b', t: 'gasto', cat: 'renta', amt: 6500, note: '', d: '2026-11-01' },
+  { id: 'c', t: 'gasto', cat: 'luz', amt: 950, note: '', d: '2026-11-01' }, { id: 'd', t: 'gasto', cat: 'ocio', amt: 110, note: 'Feria', d: '2026-11-01' }] }; return sd; })() }, async ({ page }) => {
+  await tab(page, 'dinero'); await wait(page, 300);
+  const v = await page.$eval('#view', (e) => e.innerText);
+  ok(/A este ritmo van \$6,917 a Ahorro para viajes este mes: \$150 menos que tu plan\./.test(v) && /van para \$11,020 de \$11,020/.test(v), 'gastar poco los primeros días no infla lo que va a sobrar; pagar de más la luz sí lo baja', v.match(/A este ritmo[^\n]*/)?.[0]);
+  await page.click('[data-act="dsub"][data-sub="cats"]'); await wait(page, 200);
+  const cv = await page.$eval('#view', (e) => e.innerText);
+  const grp = [...cv.matchAll(/\n\$[\d,]+ de \$([\d,]+)\n/g)].map((m) => Number(m[1].replace(/,/g, '')));
+  ok(grp.length === 5 && grp.slice(1).reduce((a, b) => a + b, 0) === grp[0] && grp[0] === 26200, 'Fijos + Suscripciones + Variables + Ahorro = tus ingresos', grp);
 });
 const viajesNov = () => { const sd = viajes('2026-11-01'); sd['meses/2026-11'] = { tx: [{ id: 'n1', t: 'ingreso', cat: 'papa', amt: 20000, note: '', d: '2026-11-01' }] }; return sd; };
 await run('Lo que sobró de octubre (dom 1 nov 9:00)', { time: '2026-11-01T09:00:00-06:00', seed: viajesNov() }, async ({ page }) => {
